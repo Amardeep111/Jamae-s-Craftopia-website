@@ -1,16 +1,122 @@
-# React + Vite
+# Jamae's Craftopia - Next.js
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A handmade crafts e-commerce platform showcasing artisanal products, built with Next.js 15, React 19, and Tailwind CSS 4.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Modern Stack**: Next.js 15 with App Router, React 19, Tailwind CSS 4
+- **Design System**: Custom color palette with warm, handmade aesthetic
+- **Animations**: Framer Motion for smooth transitions
+- **Responsive**: Mobile-first design with fluid layouts
+- **Accessible**: WCAG-compliant components with keyboard navigation
+- **SEO Optimized**: Server-side rendering with metadata API
 
-## React Compiler
+## Getting Started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Prerequisites
 
-## Expanding the Oxlint configuration
+- Node.js 18+ and npm
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+### Installation
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
+```
+
+Open [http://localhost:3000](http://localhost:3000) to view the site.
+
+## Project Structure
+
+```
+app/
+├── components/
+│   ├── home/          # Homepage sections
+│   ├── layout/        # Navigation, footer, page headers
+│   └── ui/            # Reusable UI components
+├── data/              # Product catalog, categories, site config
+├── hooks/             # Custom React hooks
+├── lib/               # Utility functions
+├── shop/              # Shop pages (listing + product details)
+├── about/             # About page
+├── contact/           # Contact form
+├── custom-orders/     # Custom order request form
+├── layout.jsx         # Root layout with fonts
+├── page.jsx           # Homepage
+├── globals.css        # Global styles + Tailwind
+└── not-found.jsx      # 404 page
+```
+
+## Design System
+
+See `design-system.md` and `MD-SPEC.md` for:
+- Color palette (cream, plum, blush, lavender, etc.)
+- Typography (Fraunces display + Nunito body)
+- Component specifications
+- Spacing and layout guidelines
+
+## Customization
+
+### Add Products
+
+Edit `app/data/products.js` to add/modify products. Each product includes:
+- Name, category, price, description
+- Materials, care instructions, customization options
+- Visual placeholder (until real photos are added)
+
+### Update Contact Info
+
+Edit `app/data/site.js` to update:
+- Business name, location
+- Email, phone, WhatsApp
+- Social media links
+
+### Replace Illustrations
+
+Current placeholders are in `app/components/ui/CraftIllustration.jsx`. To use real photos:
+1. Add images to `public/images/`
+2. Set `image: '/images/product-name.jpg'` in product data
+3. `ProductImage` component will automatically use photos when available
+
+## Deployment
+
+### Vercel (Recommended)
+
+```bash
+npm run build
+# Deploy to Vercel via CLI or connect GitHub repo
+```
+
+### Other Platforms
+
+```bash
+npm run build
+npm start  # Runs on port 3000
+```
+
+Set `NODE_ENV=production` in your hosting environment.
+
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router, Server Components)
+- **UI**: React 19, Tailwind CSS 4
+- **Animations**: Framer Motion
+- **Icons**: Lucide React
+- **Fonts**: Google Fonts (Fraunces, Nunito)
+
+## License
+
+Internal project for Jamae's Craftopia.
+
+---
+
+Built with ❤️ for handmade crafts in Siliguri, India.

@@ -1,0 +1,142 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  accent      String?
+  image       String?
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+
+  @@index([slug])
+}
+
+model Product {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  category       Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId     String
+  price          Int
+  featured       Boolean  @default(false)
+  short          String
+  description    String   @db.Text
+  materials      String?
+  care           String?
+  customization  String?
+  visual         String?  // Fallback illustration type
+  palette        Json?    // Color palette array
+  images         Json?    // Array of image URLs
+  stock          Int      @default(0)
+  published      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  orderItems     OrderItem[]
+
+  @@index([slug])
+  @@index([categoryId])
+  @@index([featured])
+  @@index([published])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNumber     String      @unique
+  customerName    String
+  customerEmail   String
+  customerPhone   String?
+  shippingAddress Json?
+  status          OrderStatus @default(PENDING)
+  paymentMethod   String?
+  paymentStatus   String?
+  totalAmount     Int
+  notes           String?     @db.Text
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  items           OrderItem[]
+
+  @@index([orderNumber])
+  @@index([customerEmail])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId     String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productId   String
+  quantity    Int
+  unitPrice   Int
+  customization String? @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model CustomRequest {
+  id          String   @id @default(cuid())
+  name        String
+  contact     String
+  idea        String   @db.Text
+  category    String?
+  colors      String?
+  budget      String?
+  occasion    String?
+  details     String   @db.Text
+  status      RequestStatus @default(NEW)
+  adminNotes  String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String   @db.Text
+  read      Boolean  @default(false)
+  replied   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([read])
+  @@index([createdAt])
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum RequestStatus {
+  NEW
+  REVIEWING
+  QUOTED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  DECLINED
+}
