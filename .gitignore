@@ -5,6 +5,9 @@
 
 # testing
 /coverage
+/test-results/
+/playwright-report/
+playwright/.cache/
 
 # next.js
 /.next/
@@ -13,10 +16,13 @@
 # production
 /build
 /dist
+/.turbo/
+/.cache/
 
 # misc
 .DS_Store
 *.pem
+*.log
 
 # debug
 npm-debug.log*
@@ -30,6 +36,14 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local agent and harness state
+/.claude/
+/.harness-worktrees/
+/.cursor
+/.devin
+
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+

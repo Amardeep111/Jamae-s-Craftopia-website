@@ -19,7 +19,6 @@ import { useCouponStore } from '@/lib/coupon'
 import { useAddressStore } from '@/lib/address'
 import { useUserStore } from '@/lib/user'
 import usePayment from '@/hooks/usePayment'
-import { COD_FEE, methodHasFee } from '@/lib/paymentFees'
 
 export default function PaymentPage() {
   const router = useRouter()
@@ -29,6 +28,10 @@ export default function PaymentPage() {
   const clearCart = useCartStore((s) => s.clear)
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
+  const availableMethods = items.reduce((allowed, item) => {
+    const productMethods = Array.isArray(item.allowedPaymentMethods) && item.allowedPaymentMethods.length ? item.allowedPaymentMethods : ['upi']
+    return allowed.filter((method) => productMethods.includes(method))
+  }, ['upi', 'cod'])
 
   // ── Coupon ──────────────────────────────────────────────────────────────
   const coupon = useCouponStore((s) => s.coupon)
@@ -48,10 +51,17 @@ export default function PaymentPage() {
   const [failureMessage, setFailureMessage] = useState('')
   // Idempotency guard — prevent duplicate orders on double-click / network retry.
   const [inFlight, setInFlight] = useState(false)
+  useEffect(() => {
+    if (availableMethods.length && !availableMethods.includes(selectedMethod)) setSelectedMethod(availableMethods[0])
+  }, [availableMethods.join(','), selectedMethod])
 
   // ── Fee ─────────────────────────────────────────────────────────────────
-  const codFee = methodHasFee('cod') ? COD_FEE : 0
-  const codTotal = subtotal - discount + codFee
+  const gstTotal = items.reduce((sum, item) => sum + (item.gstAmount || Math.round(item.price * (item.gstPercent || 0) / 100)) * item.quantity, 0)
+  const codFee = items.reduce((sum, item) => sum + (item.codFee || 0) * item.quantity, 0)
+  const otherChargeTotal = items.reduce((sum, item) => sum + (item.otherCharge || 0) * item.quantity, 0)
+  const shipping = subtotal >= 999 ? 0 : 49
+  const orderTotal = subtotal - discount + shipping + gstTotal + otherChargeTotal
+  const codTotal = orderTotal + codFee
   const currentFee = selectedMethod === 'cod' ? codFee : 0
 
   // ── Payment service ──────────────────────────────────────────────────────
@@ -80,12 +90,12 @@ export default function PaymentPage() {
     setSubmitState('processing')
 
     try {
-      // COD: no online payment verification needed. Create order directly.
-      if (selectedMethod === 'cod') {
+      // COD or manual UPI: the server records UPI as awaiting verification.
+      if (selectedMethod === 'cod' || selectedMethod === 'upi') {
         if (!selectedAddress || !selectedAddress.fullName) {
           setInFlight(false)
           setSubmitState('failure')
-          setFailureMessage('Please add a delivery address before placing your COD order.')
+          setFailureMessage('Please add a delivery address before placing your order.')
           return
         }
         const orderData = {
@@ -94,16 +104,18 @@ export default function PaymentPage() {
           customerPhone: selectedAddress?.mobileNumber || '',
           shippingAddress: { ...selectedAddress, userId: authUserId || null },
           totalAmount: codTotal,
-          paymentMethod: 'Cash on Delivery',
-          paymentStatus: 'COD_PENDING_COLLECTION',
-          status: 'CONFIRMED',
+          paymentMethod: selectedMethod === 'cod' ? 'Cash on Delivery' : 'UPI',
+          paymentReference: selectedMethod === 'upi' ? (details?.paymentReference || null) : null,
+          paymentStatus: selectedMethod === 'cod' ? 'COD_PENDING_COLLECTION' : 'AWAITING_VERIFICATION',
+          status: selectedMethod === 'cod' ? 'CONFIRMED' : 'PENDING',
           items: items.map((i) => ({
             productId: i.id,
             productName: i.name,
             unitPrice: i.price,
             quantity: i.quantity,
           })),
-          notes: 'Payment method: COD | Pay on delivery',
+          couponCode: coupon?.code || null,
+          notes: selectedMethod === 'cod' ? 'Payment method: COD | Pay on delivery' : 'Payment method: UPI | Customer reports payment sent; verification required.',
         }
 
         const order = await createOrder(orderData)
@@ -123,11 +135,11 @@ export default function PaymentPage() {
                 orderId: order?.id,
                 orderNumber,
                 amount: codTotal,
-                method: 'Cash on Delivery',
+                method: selectedMethod === 'cod' ? 'Cash on Delivery' : 'UPI',
                 address: selectedAddress,
                 testMode: false,
-                paymentStatus: 'COD_PENDING_COLLECTION',
-                status: 'CONFIRMED',
+                paymentStatus: selectedMethod === 'cod' ? 'COD_PENDING_COLLECTION' : 'AWAITING_VERIFICATION',
+                status: selectedMethod === 'cod' ? 'CONFIRMED' : 'PENDING',
               })
             )
           }
@@ -135,6 +147,13 @@ export default function PaymentPage() {
           /* session storage may be unavailable; redirect anyway */
         }
 
+        if (selectedMethod === 'upi') {
+          setOrderResult({ orderId: order?.id, orderNumber, amount: orderTotal, method: 'UPI', address: selectedAddress, paymentStatus: 'AWAITING_VERIFICATION', paymentReference: details?.paymentReference || null, whatsappNumber: details?.whatsappNumber || null })
+          setInFlight(false)
+          setSubmitState('success')
+          clearCart()
+          return
+        }
         setInFlight(false)
 
         // Hard redirect so we leave the payment page entirely.
@@ -150,9 +169,13 @@ export default function PaymentPage() {
       const initResult = await initialize({
         method: selectedMethod,
         details,
-        amount: codTotal,
+        amount: orderTotal + currentFee,
         currency: 'INR',
       })
+
+      if (initResult.testMode) {
+        throw new Error('Online payment is not connected yet. No payment was taken. Please choose Cash on Delivery.')
+      }
 
       let confirmed
       try {
@@ -162,21 +185,19 @@ export default function PaymentPage() {
           details,
         })
       } catch (verifyError) {
-        if (initResult.testMode) {
-          confirmed = { verified: false, status: 'test', testMode: true }
-        } else {
-          throw verifyError
-        }
+        throw verifyError
       }
+
+      if (!confirmed?.verified) throw new Error('Your payment could not be verified. No order was placed.')
 
       const orderData = {
         customerName: selectedAddress?.fullName || '',
-        customerEmail: selectedAddress?.email || '',
+        customerEmail: selectedAddress?.email || authEmail || '',
         customerPhone: selectedAddress?.mobileNumber || '',
         shippingAddress: selectedAddress || null,
-        totalAmount: codTotal,
+        totalAmount: orderTotal + currentFee,
         paymentMethod: PAYMENT_METHODS[selectedMethod]?.label || selectedMethod,
-        paymentStatus: initResult.testMode ? 'PAID' : 'PAID',
+        paymentStatus: 'PAID',
         paymentReference: initResult.providerReference,
         status: 'CONFIRMED',
         items: items.map((i) => ({
@@ -185,6 +206,7 @@ export default function PaymentPage() {
           unitPrice: i.price,
           quantity: i.quantity,
         })),
+        couponCode: coupon?.code || null,
         notes: `Payment method: ${selectedMethod} | Provider ref: ${initResult.providerReference}`,
       }
 
@@ -193,7 +215,7 @@ export default function PaymentPage() {
       setOrderResult({
         orderId: order?.id,
         orderNumber: order?.orderNumber,
-        amount: codTotal,
+        amount: orderTotal + currentFee,
         method: PAYMENT_METHODS[selectedMethod]?.label || selectedMethod,
         address: selectedAddress,
         testMode: initResult.testMode,
@@ -214,12 +236,13 @@ export default function PaymentPage() {
     // COD needs the inFlight guard; other methods use the usePayment loading state.
     const isLoading = selectedMethod === 'cod' ? inFlight : loading
     const props = {
-      total: codTotal,
+      total: orderTotal,
       fee: currentFee,
       testMode: true, // Always test mode since no real gateway is wired yet.
       onSubmit: handleSubmit,
       loading: isLoading,
       error,
+      orderId: orderResult?.orderId, // Pass the order ID if order was created
     }
     switch (selectedMethod) {
       case 'upi':     return <UpiForm {...props} />
@@ -268,11 +291,11 @@ export default function PaymentPage() {
             <>
               <div className="paper-card p-5 sm:p-6">
                 <h2 className="font-display text-xl text-plum mb-4">Payment Methods</h2>
-                <PaymentMethodList selected={selectedMethod} onSelect={setSelectedMethod} />
+                <PaymentMethodList selected={selectedMethod} onSelect={setSelectedMethod} availableMethods={availableMethods} />
               </div>
 
               {/* Selected method form */}
-              {selectedMethod && (
+              {availableMethods.includes(selectedMethod) && (
                 <div className="paper-card mt-4 p-5 sm:p-6">
                   <h2 className="font-display text-xl text-plum mb-5">
                     {PAYMENT_METHODS[selectedMethod]?.label}

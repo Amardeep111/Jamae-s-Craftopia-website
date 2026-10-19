@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { verifySession } from '@/lib/auth/session'
 
 export async function GET(request, { params }) {
   try {
     const { id } = await params
 
     // Server-side ownership check
-    const sessionCookie = request.cookies.get('jamaes_session')
-    const sessionEmail = sessionCookie?.value || null
+    const session = await verifySession(request.cookies.get('jamaes_session')?.value)
+    const sessionEmail = session?.user?.email
 
     const order = await db.getOrderById(id)
     if (!order) {
@@ -34,34 +35,7 @@ export async function PATCH(request, { params }) {
     const { id } = await params
     const body = await request.json()
 
-    const sessionCookie = request.cookies.get('jamaes_session')
-    const sessionEmail = sessionCookie?.value || null
-
-    if (!sessionEmail) {
-      return NextResponse.json({ success: false, error: 'Authentication required.' }, { status: 401 })
-    }
-
-    const order = await db.getOrderById(id)
-    if (!order) {
-      return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 })
-    }
-
-    if (order.customerEmail !== sessionEmail) {
-      return NextResponse.json({ success: false, error: 'Not authorized to modify this order' }, { status: 403 })
-    }
-
-    const allowed = ['status', 'paymentStatus', 'trackingNumber', 'shippingPartner', 'estimatedDelivery']
-    const patch = {}
-    for (const k of allowed) {
-      if (k in body) patch[k] = body[k]
-    }
-
-    if (Object.keys(patch).length === 0) {
-      return NextResponse.json({ success: false, error: 'No valid fields to update' }, { status: 400 })
-    }
-
-    const updated = await db.updateOrderStatus(id, patch)
-    return NextResponse.json({ success: true, data: updated })
+    return NextResponse.json({ success: false, error: 'Order updates are not available through this endpoint.' }, { status: 405 })
   } catch (error) {
     console.error('Error updating order:', error)
     return NextResponse.json({ success: false, error: 'Failed to update order' }, { status: 500 })

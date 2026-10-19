@@ -1,19 +1,20 @@
-// Prisma Client wrapper with graceful fallback when not generated
+// Reuse the Prisma client in development; each Vercel function instance owns
+// one client and uses Supabase's transaction pooler in production.
+import { PrismaClient } from '@prisma/client'
+
 let prismaInstance = null
 
-try {
-  const { PrismaClient } = require('@prisma/client')
-  const globalForPrisma = globalThis
-  prismaInstance = globalForPrisma.prisma || new PrismaClient()
-  if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prismaInstance
-} catch (e) {
-  console.warn('Prisma client not generated. Run "npx prisma generate" if using real database.')
-}
+const globalForPrisma = globalThis
+prismaInstance = globalForPrisma.prisma || new PrismaClient()
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prismaInstance
 
 export const prisma = prismaInstance
 
 export function shouldUseMockData() {
-  return process.env.USE_MOCK_DATA === 'true' || !prismaInstance
+  if (process.env.NODE_ENV === 'production' && process.env.USE_MOCK_DATA === 'true') {
+    throw new Error('Mock data mode must not be enabled in production.')
+  }
+  return process.env.USE_MOCK_DATA === 'true'
 }
 
 // Test database connection

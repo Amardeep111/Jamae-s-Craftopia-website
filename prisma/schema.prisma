@@ -8,6 +8,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Category {
@@ -32,6 +33,10 @@ model Product {
   category       Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   categoryId     String
   price          Int
+  discountPercent Int     @default(0)
+  gstPercent     Int      @default(0)
+  codFee         Int      @default(0)
+  otherCharge    Int      @default(0)
   featured       Boolean  @default(false)
   short          String
   description    String   @db.Text
@@ -40,12 +45,20 @@ model Product {
   customization  String?
   visual         String?  // Fallback illustration type
   palette        Json?    // Color palette array
-  images         Json?    // Array of image URLs
+  images         Json?    // Array of image URLs (legacy)
+  imageUrl       String?  // Primary Cloudinary URL
+  cloudinaryPublicId String?
   stock          Int      @default(0)
   published      Boolean  @default(true)
+  availableForSale Boolean @default(true)
+  unavailableStates String[] @default([])
+  unavailablePinCodes String[] @default([])
+  allowedPaymentMethods String[] @default(["upi"])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   orderItems     OrderItem[]
+  cartItems      CartItem[]
+  reviews        Review[]
 
   @@index([slug])
   @@index([categoryId])
@@ -56,23 +69,38 @@ model Product {
 model Order {
   id              String      @id @default(cuid())
   orderNumber     String      @unique
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   customerName    String
   customerEmail   String
   customerPhone   String?
   shippingAddress Json?
   status          OrderStatus @default(PENDING)
   paymentMethod   String?
-  paymentStatus   String?
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentReference String?
+  idempotencyKey   String?   @unique
   totalAmount     Int
-  notes           String?     @db.Text
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  subtotal        Int
+  discount        Int       @default(0)
+  shipping        Int       @default(0)
+  fee             Int       @default(0)
+  notes           String?   @db.Text
+  trackingNumber  String?
+  shippingPartner String?
+  estimatedDelivery String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   items           OrderItem[]
+  paymentLogs     PaymentLog[]
+  refundRequests  RefundRequest[]
+  reviews         Review[]
 
-  @@index([orderNumber])
   @@index([customerEmail])
-  @@index([status])
-  @@index([createdAt])
+  @@index([userId, status])
+  @@index([status, paymentStatus])
+  @@index([createdAt(sort: Desc)])
+  @@index([totalAmount])
 }
 
 model OrderItem {
@@ -83,15 +111,22 @@ model OrderItem {
   productId   String
   quantity    Int
   unitPrice   Int
+  gstPercent  Int      @default(0)
+  gstAmount   Int      @default(0)
+  codFee      Int      @default(0)
+  otherCharge Int      @default(0)
   customization String? @db.Text
   createdAt   DateTime @default(now())
 
-  @@index([orderId])
+  @@unique([orderId, productId])
   @@index([productId])
+  @@index([quantity])
 }
 
 model CustomRequest {
   id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   name        String
   contact     String
   idea        String   @db.Text
@@ -100,6 +135,8 @@ model CustomRequest {
   budget      String?
   occasion    String?
   details     String   @db.Text
+  referenceImages String[] @default([])
+  quotedPrice Int?
   status      RequestStatus @default(NEW)
   adminNotes  String?  @db.Text
   createdAt   DateTime @default(now())
@@ -107,6 +144,7 @@ model CustomRequest {
 
   @@index([status])
   @@index([createdAt])
+  @@index([userId])
 }
 
 model ContactMessage {
@@ -122,6 +160,143 @@ model ContactMessage {
   @@index([createdAt])
 }
 
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  phone     String?
+  role      String   @default("CUSTOMER")
+  adminPermissions Json?
+  adminActive Boolean @default(true)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+  sessions  Session[]
+  addresses Address[]
+  cart      Cart?
+  reviews   Review[]
+  customRequests CustomRequest[]
+}
+
+model Address {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName          String
+  mobileNumber      String
+  houseFlatBuilding String
+  areaStreet        String
+  landmark          String?
+  city              String
+  state             String
+  pinCode           String
+  addressType       String   @default("home")
+  isDefault         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId, isDefault])
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, revokedAt])
+}
+
+model EmailVerification {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  payload   Json
+  attempts  Int      @default(0)
+  resends   Int      @default(0)
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email, expiresAt])
+}
+
+model AuthRateLimit {
+  key             String   @id
+  attempts        Int      @default(0)
+  windowStartedAt DateTime @default(now())
+  blockedUntil    DateTime?
+  updatedAt       DateTime @updatedAt
+
+  @@index([blockedUntil])
+  @@index([updatedAt])
+}
+
+model Coupon {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  label          String
+  discountPercent Int
+  minSubtotal    Int      @default(0)
+  active         Boolean  @default(true)
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([active, expiresAt])
+}
+
+model StoreSetting {
+  id             String   @id @default("main")
+  merchantVpa    String?
+  merchantName   String   @default("Jamae's Craftopia")
+  whatsappNumber String?
+  updatedAt      DateTime @updatedAt
+}
+
+model PaymentLog {
+  id              String        @id @default(cuid())
+  orderId         String
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount          Int
+  status          PaymentStatus
+  provider        String?
+  providerReference String?
+  method          String?
+  utr             String?
+  verifiedBy      String?
+  verifiedAt      DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@index([orderId])
+  @@index([status])
+  @@index([providerReference])
+}
+
+model RefundRequest {
+  id            String       @id @default(cuid())
+  orderId       String
+  order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reason        String       @db.Text
+  amount        Int
+  refundUpiId   String
+  status        RefundStatus @default(REQUESTED)
+  adminNote     String?      @db.Text
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([orderId, status])
+  @@index([status, createdAt])
+}
+
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -129,6 +304,37 @@ enum OrderStatus {
   SHIPPED
   DELIVERED
   CANCELLED
+  RETURN_REQUESTED
+  RETURN_APPROVED
+  RETURN_IN_TRANSIT
+  RETURNED
+  REFUND_REQUESTED
+}
+
+enum PaymentStatus {
+  PENDING
+  AWAITING_VERIFICATION
+  PAID
+  COD_PENDING_COLLECTION
+  COD_COLLECTED
+  FAILED
+  EXPIRED
+  CANCELLED
+  MANUAL_REVIEW
+  REFUND_REQUESTED
+  REFUND_APPROVED
+  REFUND_PROCESSING
+  REFUND_REJECTED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum RefundStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
 }
 
 enum RequestStatus {
@@ -139,4 +345,48 @@ enum RequestStatus {
   IN_PROGRESS
   COMPLETED
   DECLINED
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId])
+  @@index([productId])
+}
+
+model Review {
+  id              String   @id @default(cuid())
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productRating   Int
+  deliveryRating  Int
+  packagingRating Int
+  title           String?
+  comment         String   @db.Text
+  images          String[] @default([])
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([productId, createdAt])
+  @@index([orderId])
 }

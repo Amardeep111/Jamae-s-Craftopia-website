@@ -10,6 +10,7 @@
  */
 import { Download } from 'lucide-react'
 import { formatPrice } from '@/data/products'
+import { getPaymentStatusMeta } from '@/components/orders/orderConstants'
 
 const STORE = {
   name: "Jamae's Craftopia",
@@ -100,7 +101,7 @@ export default function Invoice({ order, showPrintButton = true, hideStoreAddres
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted">Status</dt>
-              <dd className="font-semibold text-plum">{order.paymentStatus || '—'}</dd>
+              <dd className="font-semibold text-plum">{order.paymentStatus ? getPaymentStatusMeta(order.paymentStatus).label : '—'}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted">Order status</dt>

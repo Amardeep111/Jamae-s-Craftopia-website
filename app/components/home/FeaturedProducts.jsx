@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getFeaturedProducts } from '@/data/products'
 import Button from '../ui/Button'
@@ -6,7 +9,14 @@ import ScrollReveal from '../ui/ScrollReveal'
 import SectionHeading from '../ui/SectionHeading'
 
 export default function FeaturedProducts() {
-  const featured = getFeaturedProducts().slice(0, 8)
+  const [featured, setFeatured] = useState(() => getFeaturedProducts().slice(0, 8))
+  useEffect(() => {
+    let active = true
+    fetch('/api/products?featured=true&limit=8', { cache: 'no-store' }).then((response) => response.json()).then((result) => {
+      if (active && result.success && Array.isArray(result.data)) setFeatured(result.data)
+    }).catch(() => {})
+    return () => { active = false }
+  }, [])
 
   return (
     <section className="container-page mt-20 sm:mt-28">

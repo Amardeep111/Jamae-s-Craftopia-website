@@ -31,6 +31,7 @@ const STATUS_META = {
 const PAYMENT_STATUS_META = {
   PAID:                 { label: 'Paid',                color: 'text-sage',    dot: 'bg-sage',    desc: 'Payment received.' },
   COD_PENDING_COLLECTION: { label: 'Pay on Delivery',   color: 'text-bloom',   dot: 'bg-bloom',   desc: 'Payment will be collected at delivery.' },
+  AWAITING_VERIFICATION: { label: 'Payment pending verification', color: 'text-bloom', dot: 'bg-bloom', desc: 'We will confirm your order after checking the UPI transfer.' },
   COD_COLLECTED:        { label: 'COD collected',       color: 'text-sage',    dot: 'bg-sage',    desc: 'Cash payment received on delivery.' },
   PENDING:              { label: 'Pending',             color: 'text-muted',   dot: 'bg-muted',   desc: 'Awaiting payment.' },
 }
@@ -109,10 +110,10 @@ function ItemsSummary({ items }) {
     <div className="space-y-3">
       {items.map((item) => (
         <div key={item.id || item.productId} className="flex items-center gap-3">
-          {item.productImage ? (
+          {(item.productImage || item.product?.imageUrl || item.product?.images?.[0]) ? (
             <img
-              src={item.productImage}
-              alt={item.productName}
+              src={item.productImage || item.product?.imageUrl || item.product?.images?.[0]}
+              alt={item.productName || item.product?.name || 'Ordered item'}
               className="h-14 w-14 rounded-xl object-cover bg-ivory"
             />
           ) : (
@@ -121,7 +122,7 @@ function ItemsSummary({ items }) {
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-plum text-sm leading-tight">{item.productName}</p>
+            <p className="font-semibold text-plum text-sm leading-tight">{item.productName || item.product?.name || 'Ordered item'}</p>
             <p className="text-xs text-muted">Qty: {item.quantity}</p>
           </div>
           <p className="font-semibold text-plum text-sm shrink-0">
@@ -135,16 +136,18 @@ function ItemsSummary({ items }) {
 
 function AddressSummary({ address }) {
   if (!address) return null
+  if (typeof address === 'string') {
+    try { address = JSON.parse(address) } catch { return <p className="text-sm text-muted">Delivery address details are unavailable.</p> }
+  }
   return (
     <div className="flex gap-2 text-sm text-plum">
       <MapPin className="h-4 w-4 text-bloom shrink-0 mt-0.5" aria-hidden="true" />
       <div>
         <p className="font-semibold">{address.fullName} · +91 {address.mobileNumber}</p>
         <p className="text-muted text-xs leading-relaxed">
-          {[address.houseFlatBuilding, address.areaStreet]
+          {[address.houseFlatBuilding, address.areaStreet, address.landmark]
             .filter(Boolean)
             .join(', ')}
-          {address.landmark ? `, ${address.landmark}` : ''}
           <br />
           {address.city}, {address.state} — {address.pinCode}
         </p>

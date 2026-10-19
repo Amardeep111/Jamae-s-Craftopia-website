@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CheckCircle2, XCircle, Loader2, RefreshCw, ArrowRight, ShoppingBag } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, RefreshCw, ArrowRight, ShoppingBag, MessageCircle } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { formatPrice } from '@/data/products'
 
@@ -34,19 +34,21 @@ function Processing() {
 }
 
 function Success({ result, onContinueShopping, onViewOrder }) {
-  const { orderNumber, amount, method, address, testMode, paymentStatus } = result || {}
+  const { orderNumber, amount, method, address, testMode, paymentStatus, paymentReference, whatsappNumber } = result || {}
   const isCod = method === 'Cash on Delivery'
+  const isAwaitingUpi = paymentStatus === 'AWAITING_VERIFICATION'
+  const proofMessage = `Hi, I have placed order ${orderNumber || ''} for ₹${Number(amount || 0).toFixed(2)} via UPI. My UTR/reference is ${paymentReference || 'I will share it shortly'}. I am sharing the payment proof for verification.`
+  const proofUrl = isAwaitingUpi && whatsappNumber ? `https://wa.me/${String(whatsappNumber).replace(/\D/g, '')}?text=${encodeURIComponent(proofMessage)}` : ''
   const est = '3–5 days'
   const paymentLabel = isCod ? 'Pay on Delivery' : method
-  const paymentSubtitle = isCod ? 'Payment due at delivery — no online payment needed.' : (testMode ? 'Test mode — no real payment processed.' : 'Payment confirmed.')
 
   return (
     <div className="paper-card p-8 sm:p-12 text-center" role="status" aria-live="polite">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-sage/30 text-sage">
         <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
       </div>
-      <h2 className="mt-5 font-display text-3xl text-plum">{isCod ? 'Order Placed!' : 'Payment Successful'}</h2>
-      <p className="mt-1 text-sm text-muted">{isCod ? 'Thank you for choosing Cash on Delivery.' : 'Your order has been confirmed.'}</p>
+      <h2 className="mt-5 font-display text-3xl text-plum">{isAwaitingUpi ? 'Order placed — payment pending' : isCod ? 'Order Placed!' : 'Payment Successful'}</h2>
+      <p className="mt-1 text-sm text-muted">{isAwaitingUpi ? 'We will confirm your order after verifying the UPI transfer.' : isCod ? 'Thank you for choosing Cash on Delivery.' : 'Your order has been confirmed.'}</p>
 
       {testMode && !isCod && (
         <div className="mt-4 mx-auto max-w-md rounded-xl bg-peach/30 border border-peach/50 p-3 text-sm text-plum">
@@ -67,7 +69,7 @@ function Success({ result, onContinueShopping, onViewOrder }) {
           <dd className="font-semibold text-plum break-all">{orderNumber || '—'}</dd>
         </div>
         <div className="flex justify-between gap-3">
-          <dt className="text-muted">{isCod ? 'Amount due on delivery' : 'Amount paid'}</dt>
+          <dt className="text-muted">{isCod ? 'Amount due on delivery' : isAwaitingUpi ? 'Amount to verify' : 'Amount paid'}</dt>
           <dd className="font-semibold text-plum">{amount != null ? formatPrice(amount) : '—'}</dd>
         </div>
         <div className="flex justify-between gap-3">
@@ -76,7 +78,7 @@ function Success({ result, onContinueShopping, onViewOrder }) {
         </div>
         <div className="flex justify-between gap-3">
           <dt className="text-muted">Payment status</dt>
-          <dd className="font-semibold text-plum">{isCod ? 'Pay on Delivery' : (paymentStatus || (testMode ? 'Test mode' : 'Paid'))}</dd>
+          <dd className="font-semibold text-plum">{isCod ? 'Pay on Delivery' : isAwaitingUpi ? 'Awaiting verification' : (paymentStatus || (testMode ? 'Test mode' : 'Paid'))}</dd>
         </div>
         {address && (
           <div className="flex justify-between gap-3">
@@ -93,6 +95,8 @@ function Success({ result, onContinueShopping, onViewOrder }) {
           <dd className="font-semibold text-plum">{est}</dd>
         </div>
       </dl>
+
+      {proofUrl && <a href={proofUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-5 py-3 font-semibold text-white"><MessageCircle className="h-4 w-4" aria-hidden="true" />Send payment proof on WhatsApp</a>}
 
       <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
         <Button onClick={onViewOrder} variant="primary" size="md">

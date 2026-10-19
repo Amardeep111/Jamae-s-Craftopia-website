@@ -21,18 +21,6 @@ export const PAYMENT_METHODS = {
     description: 'Pay using any UPI app',
     icon: 'Smartphone',
   },
-  card: {
-    id: 'card',
-    label: 'Credit / Debit / ATM Card',
-    description: 'Secure card payment',
-    icon: 'CreditCard',
-  },
-  net_banking: {
-    id: 'net_banking',
-    label: 'Net Banking',
-    description: 'Pay through your bank',
-    icon: 'Landmark',
-  },
   cod: {
     id: 'cod',
     label: 'Cash on Delivery',
@@ -41,7 +29,7 @@ export const PAYMENT_METHODS = {
   },
 }
 
-export const PAYMENT_METHOD_ORDER = ['upi', 'card', 'net_banking', 'cod']
+export const PAYMENT_METHOD_ORDER = ['upi', 'cod']
 
 // Human-readable label for the test-mode banner shown inside the payment form.
 export const TEST_MODE_LABEL = 'Test mode — no real money is moved'

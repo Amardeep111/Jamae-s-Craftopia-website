@@ -1,51 +1,64 @@
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/db/client'
+import { hashPassword, validatePassword } from '@/lib/auth/password'
+import { randomInt } from 'node:crypto'
+import { hashEmailOtp } from '@/lib/auth/email-otp'
+import { enforceAuthRateLimit } from '@/lib/auth/rate-limit'
+import { decryptPassword } from '@/lib/auth/password-encryption'
+import { sendSignupVerificationEmail } from '@/lib/notification/email'
+
+export const runtime = 'nodejs'
+
+const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { name, email, mobile } = body || {}
-
+    const name = typeof body?.name === 'string' ? body.name.trim() : ''
+    const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const mobile = typeof body?.mobile === 'string' ? body.mobile.replace(/\D/g, '') : ''
+    const encryptedPassword = body?.encryptedPassword
+    const rateLimit = await enforceAuthRateLimit(request, {
+      scope: 'signup-v3', identity: email,
+      ipLimit: 100, identityLimit: 3,
+      windowMs: 60 * 60 * 1000, blockMs: 60 * 60 * 1000,
+    })
+    if (rateLimit.limited) return NextResponse.json({ success: false, error: 'Too many signup requests. Please try again later.' }, { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } })
+    let password = ''
+    try { password = decryptPassword(encryptedPassword) } catch {
+      return NextResponse.json({ success: false, errors: { password: 'Could not securely process your password. Please try again.' } }, { status: 400 })
+    }
     const errors = {}
-    if (!name || typeof name !== 'string' || name.trim().length < 2) {
-      errors.name = 'Please enter your full name.'
-    } else if (!/^[a-zA-Z\s'.-]+$/.test(name.trim())) {
-      errors.name = 'Please enter a valid name.'
-    }
-    const emailRe = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/
-    if (!email || !emailRe.test(email.trim())) {
-      errors.email = 'Please enter a valid email address.'
-    }
-    const mobileRe = /^\+?\d{10,15}$/
-    if (!mobile || !mobileRe.test(String(mobile).replace(/\s\-/g, '')) || String(mobile).replace(/\D/g, '').length < 10) {
-      errors.mobile = 'Please enter a valid mobile number (10–15 digits).'
-    }
+    if (name.length < 2 || !/^[a-zA-Z\s'.-]+$/.test(name)) errors.name = 'Please enter a valid full name.'
+    if (!emailRe.test(email)) errors.email = 'Please enter a valid email address.'
+    if (mobile.length < 10 || mobile.length > 15) errors.mobile = 'Please enter a valid mobile number.'
+    const passwordErrors = typeof password === 'string' ? validatePassword(password) : ['Password is required.']
+    if (passwordErrors.length) errors.password = passwordErrors.join(' ')
+    if (Object.keys(errors).length) return NextResponse.json({ success: false, errors }, { status: 400 })
 
-    if (Object.keys(errors).length > 0) {
-      return NextResponse.json({ success: false, errors, error: 'Please review the highlighted fields.' }, { status: 400 })
-    }
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) return NextResponse.json({ success: false, error: 'An account with this email already exists.' }, { status: 409 })
 
-    const normalizedEmail = email.trim().toLowerCase()
-    const normalizedMobile = String(mobile).replace(/\D/g, '')
-
-    // Persist user and set session cookie
-    const response = NextResponse.json({
-      success: true,
-      message: 'Account created. Verification required.',
-      data: { email: normalizedEmail, mobile: normalizedMobile, name: name.trim() },
+    const code = process.env.PLAYWRIGHT_TEST === 'true' && /^\d{6}$/.test(process.env.EMAIL_OTP_TEST_CODE || '')
+      ? process.env.EMAIL_OTP_TEST_CODE
+      : String(randomInt(0, 1_000_000)).padStart(6, '0')
+    const challenge = await prisma.emailVerification.create({
+      data: {
+        email,
+        codeHash: hashEmailOtp(email, code),
+        payload: { name, mobile, passwordHash: await hashPassword(password) },
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
     })
-
-    // Session cookie for auth (HTTP-only, same-site, 7 days)
-    response.cookies.set('jamaes_session', normalizedEmail, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
-      path: '/',
-    })
-
-    return response
+    try {
+      await sendSignupVerificationEmail(email, code)
+    } catch (error) {
+      await prisma.emailVerification.delete({ where: { id: challenge.id } })
+      throw error
+    }
+    return NextResponse.json({ success: true, message: 'Verification code sent.', data: { challengeId: challenge.id, email } }, { status: 201 })
   } catch (error) {
-    console.error('Auth signup error:', error)
-    return NextResponse.json({ success: false, error: 'Failed to create account' }, { status: 500 })
+    console.error('Signup verification request failed:', error)
+    return NextResponse.json({ success: false, error: error.message || 'Could not start signup.' }, { status: 503 })
   }
 }

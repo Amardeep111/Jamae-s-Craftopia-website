@@ -57,7 +57,7 @@ export const useAddressStore = create(
         const isDefault = !!data.isDefault
         const addresses = get().addresses
         const newAddr = {
-          id: genId(),
+          id: data.id || genId(),
           fullName: data.fullName.trim(),
           mobileNumber: data.mobileNumber.trim(),
           houseFlatBuilding: data.houseFlatBuilding.trim(),
@@ -144,6 +144,16 @@ export const useAddressStore = create(
           updatedAt: a.id === id ? new Date().toISOString() : a.updatedAt,
         }))
         set({ addresses: next })
+        notifyChange()
+      },
+
+      setAddresses(addresses) {
+        const list = Array.isArray(addresses) ? addresses : []
+        const current = get().selectedAddressId
+        const selected = list.some((address) => address.id === current)
+          ? current
+          : (list.find((address) => address.isDefault)?.id || list[0]?.id || null)
+        set({ addresses: list, selectedAddressId: selected, hydrated: true })
         notifyChange()
       },
 

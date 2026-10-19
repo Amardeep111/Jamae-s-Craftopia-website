@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link'
 import { ArrowUpRight } from 'lucide-react'
 import Badge from './Badge'
@@ -6,8 +8,11 @@ import Card from './Card'
 import { formatPrice } from '@/data/products'
 import { categories } from '@/data/categories'
 import { cn } from '@/lib/cn'
+import { discountedPrice, useProductDiscount } from '@/lib/promotions'
 
 export default function ProductCard({ product, className }) {
+  const discountPercent = useProductDiscount(product.id)
+  const salePrice = discountedPrice(product.price, discountPercent)
   const category = categories.find((c) => c.id === product.category)
   const photo = product.image || product.images?.[0]
 
@@ -23,8 +28,12 @@ export default function ProductCard({ product, className }) {
           visual={product.visual}
           palette={product.palette}
           className="h-full w-full"
+          imgClassName="object-cover"
         />
         <Badge className="absolute left-3 top-3">Handmade</Badge>
+        {product.stock <= 0 && <span className="absolute inset-x-0 bottom-0 bg-ink/80 px-3 py-2 text-center text-sm font-semibold text-white">Out of stock</span>}
+        {product.availableForSale === false && product.stock > 0 && <span className="absolute inset-x-0 bottom-0 bg-ink/80 px-3 py-2 text-center text-sm font-semibold text-white">Temporarily unavailable</span>}
+        {discountPercent > 0 && <span className="absolute right-3 top-3 rounded-full bg-bloom px-3 py-1 text-xs font-bold text-white">{discountPercent}% OFF</span>}
       </Link>
       <div className="flex flex-1 flex-col p-5">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-bloom">
@@ -37,7 +46,7 @@ export default function ProductCard({ product, className }) {
         </h3>
         <p className="mt-2 flex-1 text-sm leading-relaxed text-muted">{product.short}</p>
         <div className="mt-4 flex items-center justify-between gap-3">
-          <p className="font-semibold text-plum">{formatPrice(product.price)}</p>
+          <div className="flex flex-wrap items-baseline gap-2"><p className="font-semibold text-plum">{formatPrice(salePrice)}</p>{discountPercent > 0 && <><span className="text-sm text-muted line-through">{formatPrice(product.price)}</span><span className="text-xs font-semibold text-moss">{discountPercent}% off</span></>}</div>
           <Link
             href={`/shop/${product.id}`}
             className="inline-flex items-center gap-1 text-sm font-semibold text-plum transition hover:text-bloom"

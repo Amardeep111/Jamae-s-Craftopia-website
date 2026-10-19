@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { sendEmailBestEffort, sendEmail, sendSupportNotification } from '@/lib/notification/email'
 
 const contactSchema = {
   name: (val) => typeof val === 'string' && val.trim().length > 0,
@@ -31,6 +32,11 @@ export async function POST(request) {
       email: body.email.trim(),
       message: body.message.trim(),
     })
+
+    await Promise.all([
+      sendEmailBestEffort(() => sendEmail({ to: body.email.trim(), subject: "We received your message | Jamae's Craftopia", text: 'Thank you for contacting Jamae\'s Craftopia. We received your message and will get back to you soon.' }), 'contact-receipt'),
+      sendEmailBestEffort(() => sendSupportNotification({ subject: `New contact message from ${body.name.trim()}`, text: `From: ${body.name.trim()} <${body.email.trim()}>\n\n${body.message.trim()}`, replyTo: body.email.trim() }), 'contact-support'),
+    ])
 
     return NextResponse.json({
       success: true,

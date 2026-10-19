@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Plus, MapPin, Info, Sparkles } from 'lucide-react'
 import Button from '@/components/ui/Button'
@@ -8,8 +8,9 @@ import CheckoutProgress from '@/components/checkout/CheckoutProgress'
 import AddressCard from '@/components/checkout/AddressCard'
 import AddressForm from '@/components/checkout/AddressForm'
 import OrderSummary from '@/components/checkout/OrderSummary'
-import { useAddressStore, ADDRESS_TYPES, validateAddress, blankAddress } from '@/lib/address'
+import { useAddressStore, validateAddress } from '@/lib/address'
 import { useCartStore } from '@/lib/cart'
+import { useUserStore } from '@/lib/user'
 
 export default function CheckoutAddressPage() {
   const {
@@ -21,51 +22,133 @@ export default function CheckoutAddressPage() {
     removeAddress,
     setDefault,
     selectAddress,
+    setAddresses,
     getSelectedAddress,
     getDefaultAddress,
   } = useAddressStore()
 
+  const userId = useUserStore((s) => s.userId)
+  const login = useUserStore((s) => s.login)
+  const logout = useUserStore((s) => s.logout)
   const cartItems = useCartStore((s) => s.items)
   const totalPrice = cartItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const [showForm, setShowForm] = useState(false)
   const [editingAddress, setEditingAddress] = useState(null)
   const [justAdded, setJustAdded] = useState(false)
+  const [sessionReady, setSessionReady] = useState(false)
+  const [addressError, setAddressError] = useState('')
 
-  // Auto-select first/default when hydrated
   useEffect(() => {
-    if (hydrated && addresses.length > 0 && !selectedAddressId) {
+    let active = true
+    async function loadAccountData() {
+      try {
+        const meResponse = await fetch('/api/auth/me', { cache: 'no-store' })
+        const me = await meResponse.json().catch(() => ({}))
+        if (!meResponse.ok || !me.success) {
+          logout()
+          setAddresses([])
+          return
+        }
+        login(me.data)
+        const addressResponse = await fetch('/api/addresses', { cache: 'no-store' })
+        const result = await addressResponse.json().catch(() => ({}))
+        if (!addressResponse.ok || !result.success) throw new Error(result.error || 'Could not load your saved addresses.')
+        if (active) setAddresses(result.data)
+      } catch (error) {
+        if (active) {
+          setAddresses([])
+          setAddressError(error.message || 'Could not load saved addresses.')
+        }
+      } finally {
+        if (active) setSessionReady(true)
+      }
+    }
+    loadAccountData()
+    return () => { active = false }
+  }, [login, logout, setAddresses])
+
+  // Auto-select first/default when account data is ready.
+  useEffect(() => {
+    if (sessionReady && hydrated && addresses.length > 0 && !selectedAddressId) {
       const def = getDefaultAddress()
       if (def) selectAddress(def.id)
     }
-  }, [hydrated])
+  }, [sessionReady, hydrated, addresses, selectedAddressId, getDefaultAddress, selectAddress])
 
   const selectedAddr = getSelectedAddress()
 
-  const handleSave = (d) => {
+  async function handleSave(d) {
     const errs = validateAddress(d)
     if (Object.keys(errs).length > 0) return
-    if (editingAddress) {
-      updateAddress(editingAddress.id, d)
-    } else {
-      addAddress(d)
-      setJustAdded(true)
-      setTimeout(() => setJustAdded(false), 3000)
+    setAddressError('')
+    try {
+      const response = await fetch('/api/addresses', {
+        method: editingAddress ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingAddress ? { ...d, id: editingAddress.id } : d),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.success) throw new Error(result.error || 'Could not save the address.')
+      if (editingAddress) updateAddress(editingAddress.id, { ...result.data, ...d, id: editingAddress.id })
+      else {
+        addAddress(result.data)
+        setJustAdded(true)
+        setTimeout(() => setJustAdded(false), 3000)
+      }
+      setEditingAddress(null)
+      setShowForm(false)
+    } catch (error) {
+      setAddressError(error.message || 'Could not save the address. Please try again.')
     }
-    setEditingAddress(null)
-    setShowForm(false)
+  }
+
+  async function handleDelete(id) {
+    setAddressError('')
+    try {
+      const response = await fetch(`/api/addresses?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.success) throw new Error(result.error || 'Could not remove the address.')
+      removeAddress(id)
+    } catch (error) {
+      setAddressError(error.message || 'Could not remove the address.')
+    }
+  }
+
+  async function handleMakeDefault(id) {
+    const address = addresses.find((item) => item.id === id)
+    if (!address) return
+    const response = await fetch('/api/addresses', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...address, isDefault: true }),
+    })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok || !result.success) {
+      setAddressError(result.error || 'Could not update the default address.')
+      return
+    }
+    setDefault(id)
+  }
+
+  // Verify the server session before showing account data or allowing checkout.
+  if (!sessionReady) {
+    return <main className="container-page py-24 text-center text-muted">Checking your account…</main>
+  }
+  if (!userId) {
+    return (
+      <main className="container-page pb-24 pt-8 md:pt-12 text-center">
+        <div className="mx-auto max-w-md rounded-3xl bg-ivory/60 p-10">
+          <h2 className="font-display text-2xl text-plum">Sign in to checkout</h2>
+          <p className="mt-2 text-sm text-muted">Please log in or create an account to place your order.</p>
+          <Link href="/account/login?redirect=/checkout/address" className="mt-5 inline-block rounded-full bg-plum px-5 py-2.5 text-sm font-semibold text-cream">Sign in</Link>
+        </div>
+      </main>
+    )
   }
 
   const handleEdit = (a) => {
     setEditingAddress(a)
     setShowForm(true)
-  }
-
-  const handleDelete = (id) => {
-    removeAddress(id)
-  }
-
-  const handleMakeDefault = (id) => {
-    setDefault(id)
   }
 
   const handleSelect = (id) => {
@@ -87,6 +170,7 @@ export default function CheckoutAddressPage() {
         <h1 className="font-display text-3xl text-plum">Select Address</h1>
       </div>
       <p className="text-sm text-muted">Where should we deliver your handmade pieces?</p>
+      {addressError ? <p role="alert" className="mt-4 rounded-xl bg-bloom/10 p-3 text-sm text-bloom">{addressError}</p> : null}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_22rem] lg:items-start">
         {/* LEFT: Address management */}
@@ -97,7 +181,7 @@ export default function CheckoutAddressPage() {
             <div>
               <h2 className="font-display text-base text-plum">Save across sessions</h2>
               <p className="text-sm text-muted mt-0.5 leading-relaxed">
-                Addresses are saved to this device (like your bag). Sign in with an account to keep them across browsers and devices.
+                Saved addresses are linked to your account and will be available when you sign in on another device.
               </p>
             </div>
           </div>

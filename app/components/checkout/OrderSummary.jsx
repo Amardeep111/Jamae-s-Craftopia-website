@@ -13,7 +13,10 @@ export default function OrderSummary() {
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
 
   const discount = couponDiscountAmount(coupon, totalPrice)
-  const finalTotal = totalPrice - discount
+  const gstTotal = items.reduce((sum, item) => sum + (item.gstAmount || Math.round(item.price * (item.gstPercent || 0) / 100)) * item.quantity, 0)
+  const codFeeTotal = items.reduce((sum, item) => sum + (item.codFee || 0) * item.quantity, 0)
+  const otherChargeTotal = items.reduce((sum, item) => sum + (item.otherCharge || 0) * item.quantity, 0)
+  const finalTotal = totalPrice - discount + gstTotal + otherChargeTotal
 
   return (
     <aside className="paper-card p-6 sticky top-6">
@@ -44,7 +47,10 @@ export default function OrderSummary() {
         {discount > 0 && (
           <div className="flex justify-between text-bloom font-semibold"><span className="flex items-center gap-2"><Tag className="h-3.5 w-3.5" /> Discount ({coupon.code})</span><span>-{formatPrice(discount)}</span></div>
         )}
-        <div className="border-t border-sand pt-2 mt-2 flex justify-between"><span className="font-medium text-plum">Subtotal</span><span className="font-display text-xl text-plum">{formatPrice(finalTotal)}</span></div>
+        {gstTotal > 0 && <div className="flex justify-between text-muted"><span>GST</span><span>+{formatPrice(gstTotal)}</span></div>}
+        {otherChargeTotal > 0 && <div className="flex justify-between text-muted"><span>Other product charges</span><span>+{formatPrice(otherChargeTotal)}</span></div>}
+        {codFeeTotal > 0 && <div className="flex justify-between text-muted"><span>COD fees (if selected)</span><span>+{formatPrice(codFeeTotal)}</span></div>}
+        <div className="border-t border-sand pt-2 mt-2 flex justify-between"><span className="font-medium text-plum">Before shipping / COD</span><span className="font-display text-xl text-plum">{formatPrice(finalTotal)}</span></div>
       </div>
 
       <div className="mt-4 rounded-2xl bg-ivory/60 p-3 text-xs text-muted flex items-start gap-2">

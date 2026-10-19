@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, ShoppingBag, User, X } from 'lucide-react'
@@ -9,6 +9,7 @@ import { FlowerBurst } from '../ui/Decor'
 import { useLockBody, useScrolled } from '@/hooks/useScrolled'
 import { cn } from '@/lib/cn'
 import { useCartStore } from '@/lib/cart'
+import { useUserStore } from '@/lib/user'
 
 const links = [
   { to: '/', label: 'Home' },
@@ -40,6 +41,23 @@ export default function Navbar() {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   useLockBody(open)
+  const isLoggedIn = useUserStore((state) => state.isLoggedIn)
+  const customerName = useUserStore((state) => state.name)
+  const userLogin = useUserStore((state) => state.login)
+  const userLogout = useUserStore((state) => state.logout)
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}))
+        if (!active) return
+        if (response.ok && result.success) userLogin(result.data)
+        else userLogout()
+      })
+      .catch(() => { if (active) userLogout() })
+    return () => { active = false }
+  }, [userLogin, userLogout])
 
   // Reactive cart badge — directly subscribes to the Zustand cart store,
   // which is the single source of truth shared with the cart page and
@@ -82,12 +100,12 @@ export default function Navbar() {
         {/* Right side: Account + Cart */}
         <div className="flex items-center gap-1">
           <Link
-            href="/account/login"
+            href={isLoggedIn ? '/account/profile' : '/account/login'}
             className="hidden items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-plum transition hover:bg-ivory lg:flex"
-            aria-label="Login"
+            aria-label={isLoggedIn ? 'My profile' : 'Login'}
           >
             <User className="h-4 w-4" aria-hidden="true" />
-            <span>Login</span>
+            <span className="max-w-36 truncate">{isLoggedIn ? (customerName || 'My Profile') : 'Login'}</span>
           </Link>
 
           <Link
@@ -140,13 +158,13 @@ export default function Navbar() {
               ))}
               <div className="mt-3 flex flex-col gap-2 border-t border-sand/60 pt-4">
                 <Link
-                  href="/account/login"
+                  href={isLoggedIn ? '/account/profile' : '/account/login'}
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-2 rounded-2xl px-4 py-3 text-base font-semibold text-plum hover:bg-ivory/80"
-                  aria-label="Login"
+                  aria-label={isLoggedIn ? 'My profile' : 'Login'}
                 >
                   <User className="h-5 w-5" aria-hidden="true" />
-                  Login
+                  <span className="max-w-52 truncate">{isLoggedIn ? (customerName || 'My Profile') : 'Login'}</span>
                 </Link>
                 <Link
                   href="/cart"

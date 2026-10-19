@@ -17,11 +17,13 @@ import {
   Loader2,
   Star,
   ChevronRight,
+  XCircle,
 } from 'lucide-react'
 import { formatPrice } from '@/data/products'
 import { STATUS_META, STATUS_FLOW, getFlowIndex, getStatusMeta } from '@/components/orders/orderConstants'
-import Button from '@/components/ui/Button'
+import Modal from '@/components/ui/Modal'
 import { useUserStore } from '@/lib/user'
+import { getPaymentStatusMeta } from '@/components/orders/orderConstants'
 
 function StatusTimeline({ status }) {
   const currentIndex = getFlowIndex(status)
@@ -76,6 +78,15 @@ function OrderDetailContent() {
   const [reviewText, setReviewText] = useState('')
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewPhotos, setReviewPhotos] = useState([])
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState('')
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false)
+  const [refundUpiId, setRefundUpiId] = useState('')
+  const [refundReason, setRefundReason] = useState('')
+  const [refundSubmitting, setRefundSubmitting] = useState(false)
+  const [refundError, setRefundError] = useState('')
+  const [refundNotice, setRefundNotice] = useState('')
 
   useEffect(() => {
     fetch(`/api/orders/${orderId}`)
@@ -102,20 +113,54 @@ function OrderDetailContent() {
     }
   }
 
-  function handleCancel() {
-    if (!order) return
-    if (!window.confirm('Cancel this order? This cannot be undone.')) return
-    fetch(`/api/orders/${order.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'CANCELLED' }),
-    })
-      .then((r) => r.json())
-      .then((body) => {
-        if (body.success) setOrder(body.data)
-        else alert(body.error || 'Failed to cancel order.')
+  async function handleCancel() {
+    if (!order || cancelling) return
+    setCancelling(true)
+    setCancelError('')
+    try {
+      const response = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderNumber: order.orderNumber }),
       })
-      .catch(() => alert('Network error.'))
+      const body = await response.json()
+      if (body.success) {
+        setOrder(body.data)
+        setCancelDialogOpen(false)
+      } else {
+        setCancelError(body.error || 'We could not cancel this order. Please try again.')
+      }
+    } catch {
+      setCancelError('We could not reach the server. Please check your connection and try again.')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  async function handleRefundRequest(event) {
+    event.preventDefault()
+    if (!order || refundSubmitting) return
+    setRefundSubmitting(true)
+    setRefundError('')
+    try {
+      const response = await fetch('/api/orders/refund', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, reason: refundReason, refundUpiId }),
+      })
+      const body = await response.json()
+      if (!response.ok || !body.success) {
+        setRefundError(body.error || 'We could not submit the refund request.')
+        return
+      }
+      setOrder((current) => ({ ...current, paymentStatus: 'REFUND_REQUESTED' }))
+      setRefundNotice('Refund request submitted. Our team will review it and update you here.')
+      setRefundDialogOpen(false)
+    } catch {
+      setRefundError('We could not reach the server. Please try again.')
+    } finally {
+      setRefundSubmitting(false)
+    }
   }
 
   function handleSubmitReview(item) {
@@ -172,6 +217,11 @@ function OrderDetailContent() {
     )
   }
 
+  let shippingAddress = order.shippingAddress
+  if (typeof shippingAddress === 'string') {
+    try { shippingAddress = JSON.parse(shippingAddress) } catch { shippingAddress = null }
+  }
+
   const meta = getStatusMeta(order.status)
   const canCancel = !['SHIPPED', 'DELIVERED', 'CANCELLED'].includes(order.status)
   const canReview = order.status === 'DELIVERED'
@@ -193,7 +243,7 @@ function OrderDetailContent() {
             <h1 className="font-display text-3xl text-plum">{meta.label}</h1>
             <span className={['inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold', meta.bg, meta.color].join(' ')}>
               <span className={['h-1.5 w-1.5 rounded-full', meta.dot].join(' ')} />
-              {order.status}
+              {meta.label}
             </span>
           </div>
           <div className="mt-2 flex items-center gap-2 flex-wrap text-sm">
@@ -225,14 +275,97 @@ function OrderDetailContent() {
           </button>
           {canCancel && (
             <button
-              onClick={handleCancel}
+              onClick={() => { setCancelError(''); setCancelDialogOpen(true) }}
               className="inline-flex items-center gap-1.5 rounded-full border border-bloom/40 px-4 py-2 text-sm font-semibold text-bloom hover:bg-bloom/10 transition"
             >
               Cancel order
             </button>
           )}
+          {['DELIVERED', 'CANCELLED'].includes(order.status) && ['PAID', 'COD_COLLECTED'].includes(order.paymentStatus) && order.paymentStatus !== 'REFUND_REQUESTED' && (
+            <button
+              type="button"
+              onClick={() => { setRefundError(''); setRefundDialogOpen(true) }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-plum/40 px-4 py-2 text-sm font-semibold text-plum hover:bg-plum/5 transition"
+            >
+              Request refund
+            </button>
+          )}
         </div>
       </div>
+
+      <Modal
+        open={cancelDialogOpen}
+        title="Cancel this order?"
+        onClose={() => { if (!cancelling) setCancelDialogOpen(false) }}
+      >
+        <div className="flex items-start gap-3 rounded-2xl bg-blush/40 p-4">
+          <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-bloom" aria-hidden="true" />
+          <p className="text-sm leading-relaxed text-plum">
+            This action cannot be undone. If you still want to cancel, confirm below.
+          </p>
+        </div>
+        {cancelError && <p role="alert" className="mt-3 text-sm text-bloom">{cancelError}</p>}
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            disabled={cancelling}
+            onClick={() => setCancelDialogOpen(false)}
+            className="rounded-full border border-sand px-5 py-2.5 text-sm font-semibold text-plum transition hover:bg-ivory disabled:opacity-50"
+          >
+            Keep order
+          </button>
+          <button
+            type="button"
+            disabled={cancelling}
+            onClick={handleCancel}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-bloom px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-plum disabled:opacity-60"
+          >
+            {cancelling && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            {cancelling ? 'Cancelling…' : 'Yes, cancel order'}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={refundDialogOpen} title="Request a refund" onClose={() => { if (!refundSubmitting) setRefundDialogOpen(false) }}>
+        <form onSubmit={handleRefundRequest} className="space-y-4">
+          <p className="text-sm leading-relaxed text-muted">
+            Your request will be reviewed by our team. Enter the UPI ID where you want the refund sent.
+          </p>
+          <label className="block text-sm font-medium text-plum">
+            Refund UPI ID
+            <input
+              required
+              type="text"
+              autoComplete="off"
+              value={refundUpiId}
+              onChange={(event) => setRefundUpiId(event.target.value)}
+              placeholder="name@upi"
+              className="mt-1.5 w-full rounded-xl border border-sand bg-white px-4 py-3 text-sm outline-none focus:border-plum"
+            />
+          </label>
+          <label className="block text-sm font-medium text-plum">
+            Reason for refund
+            <textarea
+              required
+              minLength={5}
+              maxLength={1000}
+              rows={3}
+              value={refundReason}
+              onChange={(event) => setRefundReason(event.target.value)}
+              className="mt-1.5 w-full resize-y rounded-xl border border-sand bg-white px-4 py-3 text-sm outline-none focus:border-plum"
+            />
+          </label>
+          {refundError && <p role="alert" className="text-sm text-bloom">{refundError}</p>}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" disabled={refundSubmitting} onClick={() => setRefundDialogOpen(false)} className="rounded-full border border-sand px-5 py-2.5 text-sm font-semibold text-plum hover:bg-ivory disabled:opacity-50">Keep order</button>
+            <button type="submit" disabled={refundSubmitting} className="inline-flex items-center justify-center gap-2 rounded-full bg-plum px-5 py-2.5 text-sm font-semibold text-cream hover:bg-ink disabled:opacity-60">
+              {refundSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              {refundSubmitting ? 'Submitting…' : 'Submit request'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+      {refundNotice && <p role="status" className="mt-4 rounded-2xl bg-sage/10 px-4 py-3 text-sm text-sage">{refundNotice}</p>}
 
       {/* Two-column */}
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
@@ -357,16 +490,16 @@ function OrderDetailContent() {
           {/* Address */}
           <div className="paper-card p-6">
             <h2 className="font-display text-xl text-plum mb-3">Delivery address</h2>
-            {order.shippingAddress ? (
+            {shippingAddress ? (
               <div className="flex gap-2 text-sm text-plum">
                 <MapPin className="h-4 w-4 text-bloom shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
-                  <p className="font-semibold">{order.shippingAddress.fullName} · +91 {order.shippingAddress.mobileNumber}</p>
+                  <p className="font-semibold">{shippingAddress.fullName} · {shippingAddress.mobileNumber}</p>
                   <p className="text-muted text-xs leading-relaxed">
-                    {[order.shippingAddress.houseFlatBuilding, order.shippingAddress.areaStreet].filter(Boolean).join(', ')}
-                    {order.shippingAddress.landmark ? `, ${order.shippingAddress.landmark}` : ''}
+                    {[shippingAddress.houseFlatBuilding, shippingAddress.areaStreet, shippingAddress.landmark].filter(Boolean).join(', ')}
                     <br />
-                    {order.shippingAddress.city}, {order.shippingAddress.state} — {order.shippingAddress.pinCode}
+                    {[shippingAddress.city, shippingAddress.state].filter(Boolean).join(', ')}{shippingAddress.pinCode ? ` — ${shippingAddress.pinCode}` : ''}
+                    {shippingAddress.country ? `, ${shippingAddress.country}` : ''}
                   </p>
                 </div>
               </div>
@@ -475,7 +608,7 @@ function OrderDetailContent() {
               {order.paymentStatus && (
                 <div className="flex justify-between gap-3">
                   <span className="text-muted">Status</span>
-                  <span className="font-semibold text-plum">{order.paymentStatus}</span>
+                  <span className="font-semibold text-plum">{getPaymentStatusMeta(order.paymentStatus).label}</span>
                 </div>
               )}
               {order.paymentReference && (

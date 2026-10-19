@@ -2,11 +2,10 @@
 
 import { Truck, CheckCircle } from 'lucide-react'
 import Button from '@/components/ui/Button'
-import { methodHasFee } from '@/lib/paymentFees'
 import { formatPrice } from '@/data/products'
 
 export default function CodForm({ total, fee, onSubmit, loading, error }) {
-  const hasFee = methodHasFee('cod')
+  const hasFee = Number(fee) > 0
 
   return (
     <div>

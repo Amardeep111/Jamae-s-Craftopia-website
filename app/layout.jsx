@@ -3,6 +3,8 @@ import Navbar from './components/layout/Navbar'
 import Footer from './components/layout/Footer'
 import ScrollToTop from './components/layout/ScrollToTop'
 import PageTransition from './components/layout/PageTransition'
+import ConditionalStorefrontChrome from './components/layout/ConditionalStorefrontChrome'
+import CartSync from './components/cart/CartSync'
 
 export const metadata = {
   title: {
@@ -27,6 +29,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
+        <CartSync />
         <div className="flex min-h-screen flex-col">
           <a
             href="#main"
@@ -35,13 +38,13 @@ export default function RootLayout({ children }) {
             Skip to content
           </a>
           <ScrollToTop />
-          <Navbar />
+          <ConditionalStorefrontChrome><Navbar /></ConditionalStorefrontChrome>
           <main id="main" className="flex-1">
             <PageTransition>
               {children}
             </PageTransition>
           </main>
-          <Footer />
+          <ConditionalStorefrontChrome><Footer /></ConditionalStorefrontChrome>
         </div>
       </body>
     </html>

@@ -4,17 +4,19 @@ import { ShoppingBag, Tag, Truck, Lock } from 'lucide-react'
 import { formatPrice } from '@/data/products'
 import { useCartStore } from '@/lib/cart'
 import { useCouponStore, couponDiscountAmount } from '@/lib/coupon'
-import { methodHasFee } from '@/lib/paymentFees'
 
-export default function PaymentSummary({ method, fee = 0 }) {
+export default function PaymentSummary({ method }) {
   const items = useCartStore((s) => s.items)
   const coupon = useCouponStore((s) => s.coupon)
 
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
   const discount = couponDiscountAmount(coupon, subtotal)
-  const codFee = methodHasFee(method) ? fee : 0
-  const total = subtotal - discount + codFee
+  const gstTotal = items.reduce((sum, item) => sum + (item.gstAmount || Math.round(item.price * (item.gstPercent || 0) / 100)) * item.quantity, 0)
+  const otherChargeTotal = items.reduce((sum, item) => sum + (item.otherCharge || 0) * item.quantity, 0)
+  const codFee = method === 'cod' ? items.reduce((sum, item) => sum + (item.codFee || 0) * item.quantity, 0) : 0
+  const shipping = subtotal >= 999 ? 0 : 49
+  const total = subtotal - discount + shipping + gstTotal + otherChargeTotal + codFee
 
   return (
     <aside className="paper-card p-5 sm:p-6 sticky top-6">
@@ -45,14 +47,22 @@ export default function PaymentSummary({ method, fee = 0 }) {
           </div>
         )}
 
-        {codFee > 0 && (
+        {gstTotal > 0 && <div className="flex justify-between"><span className="text-muted">GST</span><span className="font-semibold text-plum">+{formatPrice(gstTotal)}</span></div>}
+        {otherChargeTotal > 0 && <div className="flex justify-between"><span className="text-muted">Other product charges</span><span className="font-semibold text-plum">+{formatPrice(otherChargeTotal)}</span></div>}
+
+        <div className="flex justify-between">
+          <span className="text-muted">Shipping</span>
+          <span className="font-semibold text-plum">{shipping ? `+${formatPrice(shipping)}` : 'Free'}</span>
+        </div>
+
+        {method === 'cod' && codFee > 0 && (
           <div className="flex justify-between">
             <span className="text-muted">COD handling fee</span>
             <span className="font-semibold text-bloom">+{formatPrice(codFee)}</span>
           </div>
         )}
 
-        {method && !methodHasFee(method) && (
+        {method && method !== 'cod' && (
           <div className="flex justify-between text-muted text-xs italic">
             <span>No extra charges</span>
           </div>
