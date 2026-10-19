@@ -1,0 +1,170 @@
+import { test, expect } from '@playwright/test'
+import { constants, createPublicKey, publicEncrypt } from 'node:crypto'
+
+async function encryptPassword(request, password) {
+  const response = await request.get('/api/auth/password-key')
+  const { publicKey, kid } = await response.json()
+  const ciphertext = publicEncrypt({ key: createPublicKey({ key: publicKey, format: 'jwk' }), padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' }, Buffer.from(password)).toString('base64url')
+  return { v: 1, kid, ciphertext }
+}
+
+test('shopper can browse a product and add it to the cart', async ({ page }) => {
+  await page.goto('/shop/honey-bear')
+  await expect(page.getByRole('heading', { name: 'Honey Bear' })).toBeVisible()
+  await page.getByRole('button', { name: 'Add to Cart' }).click()
+  await page.goto('/cart')
+  await expect(page.getByText('Honey Bear')).toBeVisible()
+})
+
+test('contact form saves the message and confirms it', async ({ page }) => {
+  await page.goto('/contact')
+  await page.getByLabel('Name', { exact: true }).fill('Playwright Shopper')
+  await page.getByLabel('Email', { exact: true }).fill('shopper@example.com')
+  await page.getByLabel('Message', { exact: true }).fill('Please tell me about delivery.')
+  await page.getByRole('button', { name: 'Send message' }).click()
+  await expect(page.getByRole('heading', { name: 'Message received' })).toBeVisible()
+})
+
+test('checkout explains that sign-in is required', async ({ page }) => {
+  await page.goto('/checkout/address')
+  await expect(page.getByRole('heading', { name: 'Sign in to checkout' })).toBeVisible()
+  await page.getByRole('link', { name: 'Sign in' }).click()
+  await expect(page.getByLabel('Email address')).toBeVisible()
+  await expect(page.getByLabel('Password')).toBeVisible()
+})
+
+test('signed-in customer can update profile and manage saved addresses', async ({ page }) => {
+  const marker = Math.random().toString(36).slice(2, 8).replace(/[0-9]/g, 'x')
+  const addressName = `Profile Flow User ${marker}`
+  const houseName = `Profile Flow House ${marker}`
+  const streetName = `Profile Flow Street ${marker}`
+  await page.goto('/account/login')
+  await page.getByLabel('Email address').fill('test@example.com')
+  await page.getByLabel('Password').fill('Test@123')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByRole('link', { name: 'My profile' })).toBeVisible()
+  await page.getByRole('link', { name: 'My profile' }).click()
+  await expect(page.getByRole('heading', { name: 'Profile & addresses' })).toBeVisible()
+
+  const name = page.getByLabel('Full name')
+  const phone = page.getByLabel('Mobile number')
+  const originalName = await name.inputValue()
+  const originalPhone = await phone.inputValue()
+  await name.fill('Profile Flow Test User')
+  await phone.fill('9876543219')
+  await page.getByRole('button', { name: 'Save profile' }).click()
+  await expect(page.getByRole('status')).toContainText('Profile updated')
+  await expect(page.locator('a[href="/account/profile"]')).toContainText('Profile Flow Test User')
+  await name.fill(originalName)
+  await phone.fill(originalPhone)
+  await page.getByRole('button', { name: 'Save profile' }).click()
+  await expect(page.getByRole('status')).toContainText('Profile updated')
+
+  await page.getByRole('button', { name: 'Add address' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('button', { name: 'Use your current location' })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Enter address manually' }).click()
+  await dialog.getByLabel('Full name').fill(addressName)
+  await dialog.getByLabel('Mobile number').fill('9876543219')
+  await dialog.getByLabel(/House \/ Flat \/ Building/).fill(houseName)
+  await dialog.getByLabel(/Area \/ Street/).fill(streetName)
+  await dialog.getByLabel('City').fill('Siliguri')
+  await dialog.getByLabel('State').fill('West Bengal')
+  await dialog.getByLabel('PIN code').fill('734001')
+  await dialog.getByRole('button', { name: 'Save address' }).click()
+  await expect(page.getByText(new RegExp(`${houseName}, ${streetName}`))).toBeVisible()
+
+  const profileAddress = page.locator('article').filter({ hasText: houseName })
+  await profileAddress.getByRole('button', { name: 'Edit' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Enter address manually' }).click()
+  await dialog.getByLabel(/House \/ Flat \/ Building/).fill(`Updated ${houseName}`)
+  await dialog.getByRole('button', { name: 'Update address' }).click()
+  await expect(page.getByText(new RegExp(`Updated ${houseName}, ${streetName}`))).toBeVisible()
+  await page.getByRole('button', { name: `Delete address for ${addressName}` }).click()
+  await expect(page.getByText(new RegExp(`Updated ${houseName}, ${streetName}`))).toHaveCount(0)
+})
+
+test('signup requires a valid email OTP before creating an account', async ({ page }) => {
+  const email = `otp-${Date.now()}@example.com`
+  await page.goto('/account/login')
+  await page.getByRole('button', { name: 'Create an account' }).click()
+  await page.getByLabel('Full name').fill('OTP Browser Test')
+  await page.getByLabel('Password').fill('TestPass123')
+  await page.getByLabel('Email address').fill(email)
+  await page.getByLabel('Mobile number').fill('9876543222')
+  await page.getByRole('button', { name: 'Create Account' }).click()
+  await expect(page.getByRole('heading', { name: 'Verify your account' })).toBeVisible()
+  await page.getByLabel('Digit 1 of 6').fill('0')
+  await page.getByLabel('Digit 2 of 6').fill('0')
+  await page.getByLabel('Digit 3 of 6').fill('0')
+  await page.getByLabel('Digit 4 of 6').fill('0')
+  await page.getByLabel('Digit 5 of 6').fill('0')
+  await page.getByLabel('Digit 6 of 6').fill('0')
+  await page.getByRole('button', { name: 'Verify & Create Account' }).click()
+  await expect(page.getByText('Incorrect verification code. Please try again.', { exact: true })).toBeVisible()
+  for (const [index, digit] of '246810'.split('').entries()) await page.getByLabel(`Digit ${index + 1} of 6`).fill(digit)
+  const verifyResponsePromise = page.waitForResponse((response) => response.url().includes('/api/auth/verify'))
+  await page.getByRole('button', { name: 'Verify & Create Account' }).click()
+  const verifyResponse = await verifyResponsePromise
+  expect(verifyResponse.ok(), await verifyResponse.text()).toBeTruthy()
+  await expect(page).toHaveURL(/orders\/me/)
+  const user = await page.request.get('/api/auth/me')
+  expect(user.ok()).toBeTruthy()
+  const sessionCookie = (await page.context().cookies()).find((cookie) => cookie.name === 'jamaes_session')
+  expect(sessionCookie?.value).toMatch(/^enc\.v1\./)
+  const logout = await page.request.post('/api/auth/logout', { data: {} })
+  expect(logout.ok()).toBeTruthy()
+  expect((await page.request.get('/api/auth/me')).status()).toBe(401)
+})
+
+test('signup requests are rate limited per email', async ({ request }) => {
+  const email = `signup-throttle-${Date.now()}@example.com`
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const encryptedPassword = await encryptPassword(request, 'Invalid123')
+    const response = await request.post('/api/auth/signup', { headers: { 'x-real-ip': `198.51.100.${Math.floor(Math.random() * 200) + 1}` }, data: { email, name: 'A', mobile: '123', encryptedPassword } })
+    if (attempt < 3) expect(response.status()).toBe(400)
+    else expect(response.status()).toBe(429)
+  }
+})
+
+test('signed-in shopper can save an address and place a COD order', async ({ page }) => {
+  test.setTimeout(60_000)
+  await page.goto('/shop/honey-bear')
+  await page.getByRole('button', { name: 'Add to Cart' }).click()
+  await page.goto('/checkout/address')
+  await page.getByRole('link', { name: 'Sign in' }).click()
+  await page.waitForLoadState('networkidle')
+  await page.waitForTimeout(3000)
+  await page.getByLabel('Email address').fill('test@example.com')
+  await page.getByLabel('Password').fill('Test@123')
+  await expect(page.getByLabel('Email address')).toHaveValue('test@example.com')
+  await expect(page.getByLabel('Password')).toHaveValue('Test@123')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Select Address' })).toBeVisible({ timeout: 10000 })
+  await page.getByRole('button', { name: /^(Add address|New address)$/ }).click()
+  await page.getByRole('button', { name: 'Enter address manually' }).click()
+  await page.getByLabel('Full name').fill('Test User')
+  await page.getByLabel('Mobile number').fill('9876543210')
+  await page.getByLabel('House / Flat / Building *').fill('Flat 2, Test House')
+  await page.getByLabel('Area / Street *').fill('Main Road')
+  await page.getByLabel('PIN code *').fill('110001')
+  await page.getByLabel('PIN code *').press('Tab')
+  await page.getByRole('button', { name: 'Save address' }).click()
+
+  await expect(page.getByText('Flat 2, Test House, Main Road', { exact: true }).first()).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('Flat 2, Test House, Main Road', { exact: true }).first()).toBeVisible()
+  await page.getByRole('link', { name: 'Continue to order summary' }).click()
+  await page.getByRole('link', { name: 'Continue to payment' }).click()
+  await page.getByRole('radio', { name: 'Cash on Delivery' }).click()
+  await page.getByRole('button', { name: /Place Order/ }).click()
+  await expect(page.getByRole('heading', { name: 'Order Placed!' })).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText('Honey Bear')).toBeVisible()
+  await page.goto('/orders/me')
+  await page.locator('a[href^="/orders/"]').filter({ hasText: /ORD-/ }).first().click()
+  await page.getByRole('button', { name: 'Cancel order' }).click()
+  await expect(page.getByRole('dialog', { name: 'Cancel this order?' })).toBeVisible()
+  await page.getByRole('button', { name: 'Yes, cancel order' }).click()
+  await expect(page.getByRole('heading', { name: 'Cancelled' })).toBeVisible()
+})

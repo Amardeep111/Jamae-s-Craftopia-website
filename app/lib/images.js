@@ -1,6 +1,6 @@
 /**
  * Image Upload and Management Utilities
- * Handles dynamic image uploads with Vercel Blob Storage
+ * Handles Cloudinary-backed product image delivery and upload requests.
  */
 
 /**
@@ -75,17 +75,17 @@ export function getOptimizedImageUrl(url, options = {}) {
     return url
   }
 
-  // For Vercel Blob URLs, add transformation parameters
   const { width, height, quality = 85, format = 'webp' } = options
-  const params = new URLSearchParams()
+  if (url.includes('res.cloudinary.com/') && url.includes('/image/upload/')) {
+    const transforms = [`f_${format === 'webp' ? 'auto' : format}`, `q_${quality}`, width ? `w_${width}` : null, height ? `h_${height}` : null, 'c_limit'].filter(Boolean).join(',')
+    return url.replace('/image/upload/', `/image/upload/${transforms}/`)
+  }
 
-  if (width) params.append('w', width)
-  if (height) params.append('h', height)
-  if (quality) params.append('q', quality)
-  if (format) params.append('fm', format)
+  // Other remote image URLs remain usable as-is.
+  if (!url.startsWith('/')) return url
 
-  const query = params.toString()
-  return query ? `${url}?${query}` : url
+  // Local development image paths are served by Next.js.
+  return url
 }
 
 /**

@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useMemo, useState } from 'react'
+import { use, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, Minus, Plus, Flower2 } from 'lucide-react'
 import { useCartStore } from '@/lib/cart'
@@ -10,20 +10,63 @@ import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
 import ProductCard from '@/components/ui/ProductCard'
+import Select from '@/components/ui/dropdown/Select'
+import { indiaStates } from '@/lib/india-states'
 import ProductImageGallery from '@/components/ui/ProductImageGallery'
 import CustomerReviews from '@/components/ui/CustomerReviews'
+import { discountedPrice, useProductPricing } from '@/lib/promotions'
 
 export default function ProductDetails({ params }) {
   const { productId } = use(params)
-  const product = getProductById(productId)
+  const [product, setProduct] = useState(() => getProductById(productId) || null)
+  const [productResolved, setProductResolved] = useState(false)
+  const { discountPercent, gstPercent, codFee, otherCharge } = useProductPricing(productId)
+  const salePrice = product ? discountedPrice(product.price, discountPercent) : 0
+  const cartProduct = product ? { ...product, originalPrice: product.price, discountPercent, gstPercent, codFee, otherCharge, price: salePrice } : product
   const [qty, setQty] = useState(1)
   const [customOpen, setCustomOpen] = useState(false)
   const [addedConfirm, setAddedConfirm] = useState(false)
   const [goToBag, setGoToBag] = useState(false)
+  const [deliveryState, setDeliveryState] = useState('')
+  const [deliveryPin, setDeliveryPin] = useState('')
+  const [deliveryResult, setDeliveryResult] = useState(null)
   const addItem = useCartStore((s) => s.addItem)
+
+  useEffect(() => {
+    let active = true
+    fetch(`/api/products/${encodeURIComponent(productId)}`, { cache: 'no-store' }).then((response) => response.json()).then((result) => {
+      if (!active) return
+      setProduct(result.success ? result.data : null)
+      setProductResolved(true)
+    }).catch(() => { if (active) setProductResolved(true) })
+    return () => { active = false }
+  }, [productId])
 
   const related = useMemo(() => (product ? getRelatedProducts(product) : []), [product])
   const category = product ? categories.find((c) => c.id === product.category) : null
+  const outOfStock = product && Number.isFinite(Number(product.stock)) && Number(product.stock) <= 0
+  const locationRestricted = product?.availableForSale === false || Boolean(deliveryResult && !deliveryResult.available)
+
+  function checkDelivery() {
+    const state = deliveryState.trim().toLocaleLowerCase('en-IN').replace(/[.\s]+/g, ' ')
+    const pin = deliveryPin.replace(/\D/g, '')
+    if (product.availableForSale === false) {
+      setDeliveryResult({ available: false, message: 'This item is temporarily unavailable for purchase.' })
+      return
+    }
+    if (!state && pin.length !== 6) {
+      setDeliveryResult({ available: false, message: 'Enter a state or a 6-digit PIN code to check delivery.' })
+      return
+    }
+    const blockedState = (product.unavailableStates || []).find((value) => String(value).trim().toLocaleLowerCase('en-IN').replace(/[.\s]+/g, ' ') === state)
+    const blockedPin = (product.unavailablePinCodes || []).find((value) => String(value).replace(/\D/g, '') === pin)
+    if (blockedState) setDeliveryResult({ available: false, message: `This item is not available for delivery to ${deliveryState.trim()}.` })
+    else if (pin.length === 6 && blockedPin) setDeliveryResult({ available: false, message: `This item is not available for delivery to PIN code ${pin}.` })
+    else if (outOfStock) setDeliveryResult({ available: false, message: 'This item is currently out of stock.' })
+    else setDeliveryResult({ available: true, message: 'Delivery is available to this location. Final serviceability is checked at checkout.' })
+  }
+
+  if (!product && !productResolved) return <div className="container-page py-20 text-center text-muted" role="status">Loading product…</div>
 
   if (!product) {
     return (
@@ -79,8 +122,20 @@ export default function ProductDetails({ params }) {
             <p className="mt-2 text-sm font-semibold uppercase tracking-[0.18em] text-bloom">
               {category?.name}
             </p>
-            <p className="mt-4 text-2xl font-semibold text-plum">{formatPrice(product.price)}</p>
+            <div className="mt-4 flex flex-wrap items-baseline gap-3"><p className="text-2xl font-semibold text-plum">{formatPrice(salePrice)}</p>{discountPercent > 0 && <><span className="text-base text-muted line-through">{formatPrice(product.price)}</span><span className="rounded-full bg-bloom/10 px-3 py-1 text-sm font-bold text-bloom">{discountPercent}% off</span></>}</div>
+            {(gstPercent > 0 || codFee > 0 || otherCharge > 0) && <p className="mt-2 text-xs text-muted">{[gstPercent > 0 ? `GST ${gstPercent}%` : null, codFee > 0 ? `COD fee ${formatPrice(codFee)} per item` : null, otherCharge > 0 ? `Other charge ${formatPrice(otherCharge)} per item` : null].filter(Boolean).join(' · ')}. Calculated at checkout.</p>}
             <p className="mt-4 leading-relaxed text-muted">{product.description}</p>
+
+            <section className="mt-5 rounded-2xl border border-sand bg-ivory/70 p-4" aria-label="Delivery availability">
+              <h2 className="text-sm font-semibold text-plum">Check delivery availability</h2>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto]">
+                <Select label="State (optional)" options={indiaStates.map((state) => ({ value: state, label: state }))} value={deliveryState} onChange={(value) => { setDeliveryState(value); setDeliveryResult(null) }} placeholder="Choose a state" showSearch searchPlaceholder="Search states..." />
+                <label className="block text-sm font-semibold text-plum">PIN code (optional)<input aria-label="Delivery PIN code" inputMode="numeric" maxLength={6} value={deliveryPin} onChange={(event) => { setDeliveryPin(event.target.value.replace(/\D/g, '').slice(0, 6)); setDeliveryResult(null) }} placeholder="6-digit PIN" className="mt-1.5 min-h-11 w-full rounded-xl border border-sand bg-white px-3 text-sm font-normal" /></label>
+                <button type="button" onClick={checkDelivery} className="min-h-11 self-end rounded-xl bg-plum px-4 text-sm font-semibold text-cream">Check</button>
+              </div>
+              {deliveryResult && <p role={deliveryResult.available ? 'status' : 'alert'} className={`mt-2 text-sm ${deliveryResult.available ? 'text-green-800' : 'text-bloom'}`}>{deliveryResult.message}</p>}
+              {!deliveryResult && (product.unavailableStates?.length > 0 || product.unavailablePinCodes?.length > 0) && <p className="mt-2 text-xs text-muted">Some delivery areas are excluded. Check your state or PIN code.</p>}
+            </section>
 
             {/* Details */}
             <div className="mt-8 space-y-4 rounded-3xl bg-ivory/80 p-5">
@@ -124,14 +179,15 @@ export default function ProductDetails({ params }) {
               </div>
 
               {/* Add to Cart */}
-              <Button
+              <Button disabled={outOfStock || locationRestricted}
                 onClick={() => {
+                  if (outOfStock || locationRestricted) return
                   if (goToBag) {
                     window.location.href = '/cart'
                     return
                   }
                   try {
-                    addItem(product, qty)
+                    addItem(cartProduct, qty)
                     setAddedConfirm(true)
                     setGoToBag(false)
                     setTimeout(() => {
@@ -145,13 +201,14 @@ export default function ProductDetails({ params }) {
                 variant="outline"
                 className="border-plum/40 ring-1 ring-plum/10 hover:border-plum/60 hover:ring-plum/20 hover:shadow-[0_2px_8px_rgba(95,45,75,0.08)] focus:ring-plum/30 active:border-plum/70"
               >
-                {goToBag ? 'Go to Bag' : addedConfirm ? 'Added to Bag' : 'Add to Cart'}
+                {outOfStock ? 'Out of stock' : product.availableForSale === false ? 'Temporarily unavailable' : locationRestricted ? 'Unavailable at this location' : goToBag ? 'Go to Bag' : addedConfirm ? 'Added to Bag' : 'Add to Cart'}
               </Button>
 
               {/* Buy Now */}
-              <Button
+              <Button disabled={outOfStock || locationRestricted}
                 onClick={() => {
-                  addItem(product, qty)
+                  if (outOfStock || locationRestricted) return
+                  addItem(cartProduct, qty)
                   window.location.href = '/checkout'
                 }}
               >

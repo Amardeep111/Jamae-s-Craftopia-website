@@ -10,10 +10,12 @@ const ICONS = {
   cod: Truck,
 }
 
-export default function PaymentMethodList({ selected, onSelect }) {
+export default function PaymentMethodList({ selected, onSelect, availableMethods = PAYMENT_METHOD_ORDER }) {
+  const methods = PAYMENT_METHOD_ORDER.filter((id) => availableMethods.includes(id))
+  if (!methods.length) return <p role="alert" className="rounded-xl bg-peach/30 p-4 text-sm text-plum">The items in your cart have different payment restrictions. Please place them in separate orders.</p>
   return (
     <ul role="radiogroup" aria-label="Choose a payment method" className="space-y-2.5">
-      {PAYMENT_METHOD_ORDER.map((id) => {
+      {methods.map((id) => {
         const method = PAYMENT_METHODS[id]
         const Icon = ICONS[id] || CreditCard
         const isSelected = selected === id

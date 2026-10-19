@@ -50,7 +50,7 @@ export default function AddressForm({ open, onClose, onSave, initial = null }) {
 
   const handleLocationConfirm = (locData) => {
     const updates = {}
-    if (locData.street || locData.area) updates.areaStreet = locData.street || locData.area || data.areaStreet || ''
+    if (locData.areaStreet || locData.street || locData.area) updates.areaStreet = locData.areaStreet || locData.street || locData.area || data.areaStreet || ''
     if (locData.city) updates.city = locData.city
     if (locData.state) updates.state = locData.state
     if (locData.pinCode) updates.pinCode = locData.pinCode

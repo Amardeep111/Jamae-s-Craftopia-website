@@ -21,12 +21,12 @@ export default function usePayment() {
     try {
       const data = await fn()
       setState(successText ? 'success' : 'processing')
-      return { ok: true, data }
+      return data
     } catch (e) {
       const message = e.message || failText || 'Something went wrong.'
       setError(message)
       setState(failText === 'failed' ? 'failed' : 'processing')
-      return { ok: false, error: message }
+      throw e
     } finally {
       setLoading(false)
     }

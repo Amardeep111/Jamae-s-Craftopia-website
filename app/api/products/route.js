@@ -14,36 +14,22 @@ export async function GET(request) {
     if (featured === 'true') filters.featured = true
     if (search) filters.search = search
     if (limit) filters.limit = parseInt(limit)
+    // Public catalog requests can never expose draft/unpublished listings.
+    filters.published = true
 
     const products = await db.getProducts(filters)
+    const publicProducts = products.map((product) => ({ ...product, category: product.categoryId || product.category, image: product.imageUrl || product.image || product.images?.[0] || null }))
 
     return NextResponse.json({
       success: true,
-      data: products,
-      count: products.length,
+      data: publicProducts,
+      count: publicProducts.length,
     })
   } catch (error) {
     console.error('Error fetching products:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to fetch products' },
       { status: 500 }
-    )
-  }
-}
-
-export async function POST(request) {
-  try {
-    // This would be protected by admin authentication
-    const body = await request.json()
-
-    return NextResponse.json(
-      { success: false, error: 'Not implemented - requires admin authentication' },
-      { status: 501 }
-    )
-  } catch (error) {
-    return NextResponse.json(
-      { success: false, error: 'Invalid request' },
-      { status: 400 }
     )
   }
 }

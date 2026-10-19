@@ -8,7 +8,8 @@
  */
 
 // COD handling fee (₹) — flat, small, clearly disclosed.
-export const COD_FEE = 49
+// COD fees are set per product in the admin catalog and summed at checkout.
+export const COD_FEE = 0
 
 // Online payment handling fee. Currently 0 — no gateway fee is charged.
 export const PAYMENT_FEE = 0

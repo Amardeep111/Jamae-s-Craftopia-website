@@ -9,10 +9,10 @@ import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import { cn } from '@/lib/cn'
 import { useUserStore } from '@/lib/user'
+import { encryptPassword } from '@/lib/auth/password-encryption-client'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const OTP_LENGTH = 6
-const RESEND_COOLDOWN = 30
 
 const emailRe = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/
 const mobileRe = /^\+?\d{10,15}$/
@@ -112,26 +112,29 @@ function AuthCard({ children }) {
 // ─── Login step ───────────────────────────────────────────────────────────────
 function LoginStep({ onSwitchToSignup, onVerified }) {
   const [value, setValue] = useState('')
-  const [error, setError] = useState('')
+  const [password, setPassword] = useState('')
+  const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setError('')
+    setErrors({})
     const t = value.trim()
-    if (!t) { setError('Please enter your email or mobile number.'); return }
-    if (!isValidEmailOrMobile(t)) { setError('Please enter a valid email or mobile number.'); return }
+    if (!t) { setErrors({ email: 'Please enter your email address.' }); return }
+    if (!isValidEmail(t)) { setErrors({ email: 'Please enter a valid email address.' }); return }
+    if (!password) { setErrors({ password: 'Please enter your password.' }); return }
+
     setLoading(true)
     let res
     try {
-      res = await fetch('/api/auth/otp', {
+      res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailOrMobile: t }),
+        body: JSON.stringify({ email: t, encryptedPassword: await encryptPassword(password) }),
       })
     } catch {
       setLoading(false)
-      setError('Network error. Please try again.')
+      setErrors({ form: 'Network error. Please try again.' })
       return
     }
     let data
@@ -140,15 +143,15 @@ function LoginStep({ onSwitchToSignup, onVerified }) {
     } catch {
       // Response body was not valid JSON — genuine network/server malfunction
       setLoading(false)
-      setError('Network error. Please try again.')
+      setErrors({ form: 'Network error. Please try again.' })
       return
     }
     if (res.ok && data.success) {
       setLoading(false)
-      onVerified({ type: 'login', contact: t })
+      onVerified(data.data.user)
     } else {
       setLoading(false)
-      setError(data.error || 'Something went wrong. Please try again.')
+      setErrors({ form: data.error || 'Something went wrong. Please try again.' })
     }
   }
 
@@ -156,19 +159,21 @@ function LoginStep({ onSwitchToSignup, onVerified }) {
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <div>
         <Input
-          label="Email or mobile number"
-          type="text"
+          label="Email address"
+          type="email"
           inputMode="email"
           autoComplete="email"
-          placeholder="Enter your email or mobile number"
+          placeholder="Enter your email address"
           value={value}
-          onChange={(e) => { setValue(e.target.value); if (error) setError('') }}
-          error={error}
+          onChange={(e) => { setValue(e.target.value); setErrors((prev) => ({ ...prev, email: '', form: '' })) }}
+          error={errors.email}
           className="text-base"
         />
       </div>
+      <Input label="Password" type="password" autoComplete="current-password" placeholder="Enter your password" value={password} onChange={(e) => { setPassword(e.target.value); setErrors((prev) => ({ ...prev, password: '', form: '' })) }} error={errors.password} className="text-base" />
+      {errors.form ? <p role="alert" className="text-sm text-bloom">{errors.form}</p> : null}
       <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? 'Requesting...' : 'Get OTP'}
+        {loading ? 'Signing in…' : 'Sign in'}
       </Button>
       <div className="border-t border-sand pt-6 text-center">
         <p className="text-sm text-muted">New to Jamae&apos;s Craftopia?</p>
@@ -189,6 +194,7 @@ function SignupStep({ onSwitchToLogin, onVerified }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [mobile, setMobile] = useState('')
+  const [password, setPassword] = useState('')
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
 
@@ -209,6 +215,9 @@ function SignupStep({ onSwitchToLogin, onVerified }) {
     } else if (!isValidMobile(mobile)) {
       e.mobile = 'Please enter a valid mobile number (10–15 digits).'
     }
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+      e.password = 'Use at least 8 characters with uppercase, lowercase, and a number.'
+    }
     return e
   }
 
@@ -226,6 +235,7 @@ function SignupStep({ onSwitchToLogin, onVerified }) {
           name: name.trim(),
           email: email.trim(),
           mobile: mobile.replace(/\D/g, ''),
+          encryptedPassword: await encryptPassword(password),
         }),
       })
     } catch {
@@ -243,7 +253,7 @@ function SignupStep({ onSwitchToLogin, onVerified }) {
     }
     if (res.ok && data.success) {
       setLoading(false)
-      onVerified({ type: 'signup', contact: data.data.email || data.data.mobile, name: name.trim() })
+      onVerified({ challengeId: data.data.challengeId, email: data.data.email, name })
     } else {
       setLoading(false)
       if (data.errors) {
@@ -271,6 +281,9 @@ function SignupStep({ onSwitchToLogin, onVerified }) {
           error={errors.name}
           className="text-base"
         />
+      </div>
+      <div>
+        <Input label="Password" type="password" autoComplete="new-password" placeholder="At least 8 characters" value={password} onChange={(e) => { setPassword(e.target.value); clearError('password') }} error={errors.password} className="text-base" />
       </div>
       <div>
         <Input
@@ -318,45 +331,38 @@ function SignupStep({ onSwitchToLogin, onVerified }) {
 }
 
 // ─── Verify step ──────────────────────────────────────────────────────────────
-function VerifyStep({ contact, isSignup, onBack }) {
+function VerifyStep({ challengeId, email, isSignup, onBack, onVerified }) {
   const [otp, setOtp] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [resendCooldown, setResendCooldown] = useState(0)
+  const [resendCooldown, setResendCooldown] = useState(30)
   const [resendLoading, setResendLoading] = useState(false)
 
-  const timerRef = useRef(null)
+  useEffect(() => {
+    if (!resendCooldown) return undefined
+    const timer = setTimeout(() => setResendCooldown((current) => Math.max(0, current - 1)), 1000)
+    return () => clearTimeout(timer)
+  }, [resendCooldown])
 
-  function startCountdown() {
-    setResendCooldown(RESEND_COOLDOWN)
-    if (timerRef.current) clearInterval(timerRef.current)
-    timerRef.current = setInterval(() => {
-      setResendCooldown(c => {
-        if (c <= 1) { clearInterval(timerRef.current); return 0 }
-        return c - 1
-      })
-    }, 1000)
-  }
-
-  async function triggerOtp() {
+  async function handleResend() {
+    if (resendCooldown || resendLoading) return
+    setError('')
+    setResendLoading(true)
     try {
-      const res = await fetch('/api/auth/otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailOrMobile: contact }),
+      const response = await fetch('/api/auth/otp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ challengeId }),
       })
-      if (!res.ok) return null
-      return res.json()
-    } catch {
-      return null
+      const result = await response.json()
+      if (!response.ok || !result.success) throw new Error(result.error || 'Could not resend the code.')
+      setOtp('')
+      setResendCooldown(30)
+    } catch (e) {
+      setError(e.message || 'Could not resend the code.')
+    } finally {
+      setResendLoading(false)
     }
   }
-
-  // Send OTP on mount
-  useEffect(() => {
-    triggerOtp().then(d => { if (d?.success) startCountdown() })
-  }, [])
 
   async function handleVerify(e) {
     e.preventDefault()
@@ -371,7 +377,7 @@ function VerifyStep({ contact, isSignup, onBack }) {
       res = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ otp: otp.replace(/\D/g, ''), emailOrMobile: contact }),
+        body: JSON.stringify({ otp: otp.replace(/\D/g, ''), challengeId }),
       })
     } catch {
       setLoading(false)
@@ -388,72 +394,18 @@ function VerifyStep({ contact, isSignup, onBack }) {
     }
     if (res.ok && data.success) {
       setLoading(false)
-      setSuccess(true)
-      // Sync Zustand auth store with server-side session
-      userLogin({ email: data.data?.emailOrMobile || contact })
+      onVerified(data.data.user)
     } else {
       setLoading(false)
       setError(data.error || 'Incorrect or expired code. Please try again.')
     }
   }
 
-  async function handleResend() {
-    if (resendCooldown > 0 || resendLoading) return
-    setResendLoading(true)
-    setError('')
-    let res
-    try {
-      res = await fetch('/api/auth/otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailOrMobile: contact }),
-      })
-    } catch {
-      setResendLoading(false)
-      setError('Network error. Please try again.')
-      return
-    }
-    let data
-    try {
-      data = await res.json()
-    } catch {
-      setResendLoading(false)
-      setError('Network error. Please try again.')
-      return
-    }
-    if (data.success) {
-      setResendLoading(false)
-      startCountdown()
-      setOtp('')
-    } else {
-      setResendLoading(false)
-      setError(data.error || 'Failed to resend. Please try again.')
-    }
-  }
-
-  if (success) {
-    return (
-      <div className="space-y-4" role="status" aria-live="polite">
-        <div className="rounded-2xl bg-sage/30 p-5 text-center">
-          <p className="font-medium text-moss">
-            {isSignup ? "Welcome to Jamae&apos;s Craftopia!" : "You're logged in!"}
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            {isSignup ? "Your account has been created successfully." : "Verification complete."}
-          </p>
-        </div>
-        <Button as={Link} href="/" className="w-full">
-          Go to Homepage
-        </Button>
-      </div>
-    )
-  }
-
   return (
     <form onSubmit={handleVerify} className="space-y-6" noValidate>
       <p className="text-muted">
         Enter the verification code sent to{' '}
-        <span className="font-medium text-plum">{formatMasked(contact)}</span>.
+        <span className="font-medium text-plum">{formatMasked(email)}</span>.
       </p>
       <div>
         <OtpInput value={otp} onChange={setOtp} error={!!error} />
@@ -465,20 +417,7 @@ function VerifyStep({ contact, isSignup, onBack }) {
         {loading ? 'Verifying...' : isSignup ? 'Verify & Create Account' : 'Verify & Log In'}
       </Button>
       <div className="flex flex-col items-center gap-3 text-center">
-        {resendCooldown > 0 ? (
-          <p className="text-sm text-muted">
-            Resend in <span className="font-semibold text-plum">{resendCooldown}s</span>
-          </p>
-        ) : (
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={resendLoading}
-            className="text-sm font-semibold text-bloom underline underline-offset-4 decoration-bloom/40 hover:decoration-bloom transition disabled:opacity-50"
-          >
-            {resendLoading ? 'Sending...' : 'Resend OTP'}
-          </button>
-        )}
+        {resendCooldown > 0 ? <p className="text-sm text-muted">Resend in {resendCooldown}s</p> : <button type="button" onClick={handleResend} disabled={resendLoading} className="text-sm font-semibold text-bloom underline underline-offset-4 disabled:opacity-50">{resendLoading ? 'Sending…' : 'Resend code'}</button>}
         <button
           type="button"
           onClick={onBack}
@@ -497,6 +436,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState('login')
   const [verifyData, setVerifyData] = useState(null)
   const userLogin = useUserStore((s) => s.login)
+  const router = useRouter()
 
   function handleSwitchToSignup() {
     setMode('signup')
@@ -509,13 +449,19 @@ export default function LoginPage() {
   }
 
   function handleVerified(data) {
-    setVerifyData(data)
-    setMode('verify')
+    userLogin({ email: data.email, name: data.name, userId: data.id })
+    const redirect = new URLSearchParams(window.location.search).get('redirect')
+    router.replace(redirect?.startsWith('/') ? redirect : data.role === 'ADMIN' ? '/admin' : '/orders/me')
   }
 
   function handleVerifyBack() {
-    setMode('login')
+    setMode(verifyData?.type === 'signup' ? 'signup' : 'login')
     setVerifyData(null)
+  }
+
+  function handleSignupStarted(data) {
+    setVerifyData({ ...data, type: 'signup' })
+    setMode('verify')
   }
 
   const isVerifySignup = verifyData?.type === 'signup'
@@ -571,7 +517,7 @@ export default function LoginPage() {
               <div className="mt-8">
                 <SignupStep
                   onSwitchToLogin={handleSwitchToLogin}
-                  onVerified={handleVerified}
+                  onVerified={handleSignupStarted}
                 />
               </div>
             </>
@@ -584,9 +530,11 @@ export default function LoginPage() {
               </h1>
               <div className="mt-8">
                 <VerifyStep
-                  contact={verifyData.contact}
+                  challengeId={verifyData.challengeId}
+                  email={verifyData.email}
                   isSignup={isVerifySignup}
                   onBack={handleVerifyBack}
+                  onVerified={handleVerified}
                 />
               </div>
             </>

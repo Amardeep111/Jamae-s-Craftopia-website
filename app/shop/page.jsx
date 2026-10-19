@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
 import { categories } from '@/data/categories'
@@ -23,6 +23,15 @@ function ShopContent() {
   const category = searchParams.get('category') || 'all'
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('featured')
+  const [catalog, setCatalog] = useState(products)
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/products?limit=500', { cache: 'no-store' }).then((response) => response.json()).then((result) => {
+      if (active && result.success && Array.isArray(result.data)) setCatalog(result.data)
+    }).catch(() => {})
+    return () => { active = false }
+  }, [])
 
   const setCategory = (slug) => {
     const params = new URLSearchParams(searchParams)
@@ -33,7 +42,7 @@ function ShopContent() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    let list = products.filter((p) => (category === 'all' ? true : p.category === category))
+    let list = catalog.filter((p) => (category === 'all' ? true : p.category === category))
     if (q) {
       list = list.filter(
         (p) =>
@@ -47,7 +56,7 @@ function ShopContent() {
     if (sort === 'price-desc') list = [...list].sort((a, b) => b.price - a.price)
     if (sort === 'featured') list = [...list].sort((a, b) => Number(b.featured) - Number(a.featured))
     return list
-  }, [category, query, sort])
+  }, [catalog, category, query, sort])
 
   return (
     <>

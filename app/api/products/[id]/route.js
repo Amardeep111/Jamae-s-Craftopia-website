@@ -3,10 +3,10 @@ import { db } from '@/lib/db'
 
 export async function GET(request, { params }) {
   try {
-    const { id } = params
+    const { id } = await params
     const product = await db.getProductById(id) || await db.getProductBySlug(id)
 
-    if (!product) {
+    if (!product || product.published === false) {
       return NextResponse.json(
         { success: false, error: 'Product not found' },
         { status: 404 }
@@ -15,7 +15,7 @@ export async function GET(request, { params }) {
 
     return NextResponse.json({
       success: true,
-      data: product,
+      data: { ...product, category: product.categoryId || product.category, image: product.imageUrl || product.image || product.images?.[0] || null },
     })
   } catch (error) {
     console.error('Error fetching product:', error)

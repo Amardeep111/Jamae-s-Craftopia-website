@@ -13,13 +13,15 @@ export default function Contact() {
   const [form, setForm] = useState(initial)
   const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const setField = (key, value) => {
     setForm((f) => ({ ...f, [key]: value }))
     setErrors((e) => ({ ...e, [key]: undefined }))
   }
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault()
     const next = {}
     if (!form.name.trim()) next.name = 'Please add your name.'
@@ -28,7 +30,22 @@ export default function Contact() {
     if (!form.message.trim()) next.message = 'A few words are enough.'
     setErrors(next)
     if (Object.keys(next).length) return
-    setSubmitted(true)
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.name.trim(), email: form.email.trim(), message: form.message.trim() }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.success) throw new Error(result.error || 'We could not send your message. Please try again.')
+      setSubmitted(true)
+    } catch (error) {
+      setSubmitError(error.message || 'Network error. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -46,8 +63,7 @@ export default function Contact() {
                 <CheckCircle2 className="mx-auto h-12 w-12 text-moss" />
                 <h2 className="heading-display mt-4 text-3xl">Message received</h2>
                 <p className="mt-3 text-muted">
-                  Thank you, {form.name}. This form is frontend-only for now — connect it to email or WhatsApp when you
-                  are ready to receive notes for real.
+                  Thank you, {form.name}. Your message has been saved. We will get back to you soon.
                 </p>
                 <Button className="mt-6" onClick={() => { setSubmitted(false); setForm(initial) }}>
                   Write another note
@@ -86,8 +102,9 @@ export default function Contact() {
                   />
                   {errors.message ? <span className="mt-1 block text-sm text-bloom">{errors.message}</span> : null}
                 </label>
-                <Button type="submit" className="mt-6">
-                  Send message
+                {submitError ? <p role="alert" className="mt-4 text-sm font-medium text-bloom">{submitError}</p> : null}
+                <Button type="submit" className="mt-6" disabled={submitting}>
+                  {submitting ? 'Sending…' : 'Send message'}
                 </Button>
               </form>
             )}

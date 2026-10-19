@@ -3,26 +3,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { MapPin, RefreshCcw, Crosshair, AlertCircle, Loader2, Navigation } from 'lucide-react'
+import { MapPin, RefreshCcw, Crosshair, AlertCircle, Loader2, Navigation, LocateFixed } from 'lucide-react'
+import CurrentLocationPicker from '@/components/ui/location/CurrentLocationPicker'
 
 /*
- * Real, production Mapbox location picker.
+ * Real, production Mapbox location picker with free geolocation fallback.
  *
  * Flow:
- *  1. On mount, the user clicks "Use my location" to call navigator.geolocation.
- *  2. Real GPS coordinates are retrieved and a Mapbox map is opened.
- *  3. A draggable marker is placed at the detected location.
- *  4. The user can drag/click to adjust; on each change we reverse-geocode via
- *     our server route at /api/geocode, which calls Mapbox's Geocoding API
- *     server-to-server using the secret MAPBOX_ACCESS_TOKEN.
- *  5. The user reviews the detected address and enters Flat / House + optional
- *     Landmark, then clicks "Confirm location" — we return the final payload
- *     to the parent form (AddressForm) which auto-fills its fields.
+ *  1. On mount, check if Mapbox token is available.
+ *  2. If YES: Use Mapbox for map tiles + reverse geocoding via server route.
+ *  3. If NO: Fall back to free browser geolocation (navigator.geolocation).
+ *  4. User reviews detected address, enters Flat/House + optional Landmark.
+ *  5. On confirm, return payload to parent form (AddressForm).
  *
  * The public mapbox token (NEXT_PUBLIC_MAPBOX_TOKEN) is only used to render
- * tiles on the client. The actual reverse-geocoding (which can be sensitive
- * and rate-limited) goes through the server route so the secret token is
- * never exposed.
+ * tiles on the client. Reverse-geocoding goes through the server route so
+ * the secret token is never exposed.
  */
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
@@ -64,20 +60,18 @@ export default function InteractiveLocationPicker({
   // The state MUST reach `ready` or `error` — it can never stay in
   // `loading` forever. A 20-second safety timeout guarantees that.
   useEffect(() => {
-    // Token guard — fail loudly with a developer-friendly message,
-    // but do not show technical configuration errors to normal customers.
     if (!MAPBOX_TOKEN) {
-      setMapStatus('error')
-      setMapError(
-        'Map configuration is missing. Please configure NEXT_PUBLIC_MAPBOX_TOKEN in .env.local and restart the dev server.'
-      )
+      // No Mapbox token — fall back to free geolocation picker (no tile map).
+      // We still set status to ready so the user can click "Use my location".
+      setMapStatus('ready')
+      setMapReady(true)
+      setMapError('')
+      console.warn('Mapbox token missing; using free geolocation fallback (no map tiles).')
+      // Do NOT initialize mapboxgl.Map — skip everything below.
       return
     }
 
-    // Container ref must exist before Mapbox can initialize.
     if (!mapContainerRef.current) return
-
-    // Already initialized (or initializing). Guard against double-init.
     if (mapRef.current) return
 
     setMapStatus('initializing')
@@ -373,6 +367,15 @@ export default function InteractiveLocationPicker({
     })
   }
 
+  const updateDetectedAddress = (field, value) => {
+    setLocationData((current) => {
+      if (!current || current.error) return current
+      if (field === 'areaStreet') return { ...current, areaStreet: value, street: value, area: value }
+      if (field === 'pinCode') return { ...current, pinCode: value.replace(/\D/g, '').slice(0, 6) }
+      return { ...current, [field]: value }
+    })
+  }
+
   // ── Hard error state (token missing etc.) ──────────────────────────────
   if (mapError) {
     return (
@@ -404,41 +407,70 @@ export default function InteractiveLocationPicker({
     )
   }
 
-  // ── Map UI (always render container so the ref resolves; overlay loading state) ──
+  const isMapboxAvailable = !!MAPBOX_TOKEN
+
+  // ── Map UI (conditional based on token availability) ──
   return (
     <div className="rounded-3xl overflow-hidden bg-cream shadow-soft ring-1 ring-sand" role="region" aria-label="Interactive location picker">
-      {/* Map — always rendered so ref is available for useEffect */}
+      {/* Map container or fallback UI */}
       <div className="relative">
-        <div ref={mapContainerRef} className="w-full h-72 sm:h-80 md:h-72 bg-sand/40" style={{ minHeight: 260 }} />
-
-        {/* Loading overlay only during initialization / loading (never after ready or error) */}
-        {(mapStatus === 'initializing' || mapStatus === 'loading' || locating) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-sand/70 backdrop-blur-sm z-20">
-            <Loader2 className="h-8 w-8 animate-spin text-bloom" aria-hidden="true" />
-            <p className="mt-3 text-sm font-medium text-plum">
-              {locating ? 'Finding your location…' : (mapStatus === 'initializing' ? 'Initializing map…' : 'Loading map…')}
-            </p>
+        {/* Free geolocation fallback UI (no mapbox token) */}
+        {!isMapboxAvailable && (
+          <div className="w-full h-72 sm:h-80 md:h-72 bg-gradient-to-br from-sand/30 to-blush/20 flex flex-col items-center justify-center p-6" style={{ minHeight: 260 }}>
+            <div className="text-center space-y-4">
+              <div className="mx-auto h-16 w-16 rounded-full bg-plum/10 flex items-center justify-center">
+                <LocateFixed className="h-8 w-8 text-plum" aria-hidden="true" />
+              </div>
+              <div>
+                <h3 className="font-display text-lg text-plum">Detect your location</h3>
+                <p className="text-sm text-muted mt-1">We'll use your browser's GPS to find your address</p>
+              </div>
+              <CurrentLocationPicker
+                onSelect={(pos) => {
+                  setMarkerPosition({ lat: pos.lat, lng: pos.lng })
+                  reverseGeocode(pos.lat, pos.lng)
+                }}
+                disabled={locating || reverseGeocoding}
+              />
+            </div>
           </div>
         )}
 
-        <div className="absolute top-3 left-3 flex flex-wrap gap-2 z-10">
-          <button
-            type="button"
-            onClick={requestLocation}
-            disabled={locating || reverseGeocoding}
-            className="inline-flex items-center gap-2 rounded-full bg-cream/95 px-3 py-2 text-xs font-bold text-plum shadow-md ring-1 ring-sand backdrop-blur-sm transition hover:bg-ivory disabled:opacity-50"
-            aria-label="Use my current location"
-          >
-            <Crosshair className={`h-3.5 w-3.5 ${locating ? 'animate-pulse' : ''}`} aria-hidden="true" />
-            {locating ? 'Finding…' : 'Use my location'}
-          </button>
-        </div>
+        {/* Mapbox UI (when token available) */}
+        {isMapboxAvailable && (
+          <>
+            <div ref={mapContainerRef} className="w-full h-72 sm:h-80 md:h-72 bg-sand/40" style={{ minHeight: 260 }} />
 
-        <div className="absolute bottom-3 right-3 z-10">
-          <span className="inline-block rounded-full bg-ink/70 px-2.5 py-1 text-[10px] font-semibold text-cream backdrop-blur-sm">
-            Drag pin to adjust
-          </span>
-        </div>
+            {/* Loading overlay only during initialization / loading (never after ready or error) */}
+            {(mapStatus === 'initializing' || mapStatus === 'loading' || locating) && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-sand/70 backdrop-blur-sm z-20">
+                <Loader2 className="h-8 w-8 animate-spin text-bloom" aria-hidden="true" />
+                <p className="mt-3 text-sm font-medium text-plum">
+                  {locating ? 'Finding your location…' : (mapStatus === 'initializing' ? 'Initializing map…' : 'Loading map…')}
+                </p>
+              </div>
+            )}
+
+            <div className="absolute top-3 left-3 flex flex-wrap gap-2 z-10">
+              <button
+                type="button"
+                onClick={requestLocation}
+                disabled={locating || reverseGeocoding}
+                className="inline-flex items-center gap-2 rounded-full bg-cream/95 px-3 py-2 text-xs font-bold text-plum shadow-md ring-1 ring-sand backdrop-blur-sm transition hover:bg-ivory disabled:opacity-50"
+                aria-label="Use my current location"
+              >
+                <Crosshair className={`h-3.5 w-3.5 ${locating ? 'animate-pulse' : ''}`} aria-hidden="true" />
+                {locating ? 'Finding…' : 'Use my location'}
+              </button>
+            </div>
+
+            <div className="absolute bottom-3 right-3 z-10">
+              <span className="inline-block rounded-full bg-ink/70 px-2.5 py-1 text-[10px] font-semibold text-cream backdrop-blur-sm">
+                Drag pin to adjust
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Status messages + address form */}
@@ -466,7 +498,7 @@ export default function InteractiveLocationPicker({
           )}
         </div>
 
-        {/* Detected address summary + only-flat/landmark left for user */}
+        {/* Let customers correct reverse-geocoded details before using them. */}
         {locationData && !locationData.error && (
           <div className="rounded-2xl bg-ivory/60 p-4 ring-1 ring-sand/60 space-y-4" role="region" aria-label="Detected address">
             <h3 className="font-display text-lg text-plum flex items-center gap-2">
@@ -476,12 +508,13 @@ export default function InteractiveLocationPicker({
                 <Navigation className="h-3 w-3" aria-hidden="true" /> GPS
               </span>
             </h3>
-            <div className="grid gap-2 text-sm">
-              <Row label="Area / Street" value={locationData.areaStreet || locationData.street || '—'} />
-              <Row label="City" value={locationData.city || '—'} />
-              <Row label="State" value={locationData.state || '—'} />
-              <Row label="PIN Code" value={locationData.pinCode || '—'} />
-              <Row label="Country" value={locationData.country || '—'} />
+            <p className="text-sm text-muted">GPS can be imprecise. Review these details and edit anything that looks wrong.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetectedField label="Area / Street" value={locationData.areaStreet || locationData.street || locationData.area || ''} onChange={(value) => updateDetectedAddress('areaStreet', value)} />
+              <DetectedField label="City" value={locationData.city || ''} onChange={(value) => updateDetectedAddress('city', value)} />
+              <DetectedField label="State" value={locationData.state || ''} onChange={(value) => updateDetectedAddress('state', value)} />
+              <DetectedField label="PIN Code" value={locationData.pinCode || ''} onChange={(value) => updateDetectedAddress('pinCode', value)} inputMode="numeric" maxLength={6} />
+              <DetectedField label="Country" value={locationData.country || ''} onChange={(value) => updateDetectedAddress('country', value)} />
             </div>
 
             <div className="grid gap-3 pt-2">
@@ -540,7 +573,7 @@ export default function InteractiveLocationPicker({
             onClick={onBack || onCancel}
             className="rounded-full px-4 py-2.5 text-sm font-semibold text-muted hover:text-plum transition"
           >
-            Back to form
+            Choose a different address method
           </button>
         </div>
       </div>
@@ -548,11 +581,18 @@ export default function InteractiveLocationPicker({
   )
 }
 
-function Row({ label, value }) {
+function DetectedField({ label, value, onChange, inputMode, maxLength }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="w-24 shrink-0 text-xs font-bold uppercase tracking-wider text-muted">{label}</span>
-      <span className="font-medium text-plum break-words">{value}</span>
-    </div>
+    <label className="block text-sm font-medium text-plum">
+      {label}
+      <input
+        type="text"
+        inputMode={inputMode}
+        maxLength={maxLength}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded-xl border border-sand bg-cream px-3 py-2.5 text-sm font-normal outline-none transition focus:border-bloom focus:ring-2 focus:ring-bloom/20"
+      />
+    </label>
   )
 }

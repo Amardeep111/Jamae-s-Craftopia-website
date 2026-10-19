@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Trash2, Minus, Plus, ShoppingBag, ArrowLeft, Tag, Check } from 'lucide-react'
 import Button from '@/components/ui/Button'
@@ -13,6 +13,7 @@ export default function CartPage() {
   const items = useCartStore((s) => s.items)
   const removeItem = useCartStore((s) => s.removeItem)
   const updateQuantity = useCartStore((s) => s.updateQuantity)
+  const updateItemPrices = useCartStore((s) => s.updateItemPrices)
   const coupon = useCouponStore((s) => s.coupon)
   const applyCouponFn = useCouponStore((s) => s.apply)
   const removeCouponFn = useCouponStore((s) => s.remove)
@@ -22,12 +23,24 @@ export default function CartPage() {
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
   const discountAmount = couponDiscountAmount(coupon, subtotal)
-  const total = subtotal - discountAmount
+  const gstTotal = items.reduce((sum, item) => sum + (item.gstAmount || Math.round(item.price * (item.gstPercent || 0) / 100)) * item.quantity, 0)
+  const codFeeTotal = items.reduce((sum, item) => sum + (item.codFee || 0) * item.quantity, 0)
+  const otherChargeTotal = items.reduce((sum, item) => sum + (item.otherCharge || 0) * item.quantity, 0)
+  const total = subtotal - discountAmount + gstTotal + otherChargeTotal
 
   const [couponInput, setCouponInput] = useState('')
+  const pricesChecked = useRef(false)
 
-  function handleApplyCoupon() {
-    const ok = applyCouponFn(couponInput)
+  useEffect(() => {
+    if (!items.length || pricesChecked.current) return
+    pricesChecked.current = true
+    fetch('/api/cart/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items.map(({ id, quantity }) => ({ productId: id, quantity })) }) })
+      .then(async (response) => { const result = await response.json(); if (response.ok && result.success) updateItemPrices(result.data.items) })
+      .catch(() => {})
+  }, [items, updateItemPrices])
+
+  async function handleApplyCoupon() {
+    const ok = await applyCouponFn(couponInput, subtotal)
     if (ok) setCouponInput('')
   }
 
@@ -82,7 +95,7 @@ export default function CartPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="font-display text-xl text-plum">{item.name}</h3>
-                    <p className="mt-0.5 text-sm font-semibold text-bloom">{formatPrice(item.price)} each</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-2 text-sm font-semibold text-bloom"><span>{formatPrice(item.price)} each</span>{item.discountPercent > 0 && <><span className="font-normal text-muted line-through">{formatPrice(item.originalPrice)}</span><span className="text-xs text-moss">{item.discountPercent}% off</span></>}</p>
                   </div>
                   <button
                     type="button"
@@ -178,6 +191,10 @@ export default function CartPage() {
                   <span className="font-semibold text-bloom">−{formatPrice(discountAmount)}</span>
                 </div>
               )}
+
+              {gstTotal > 0 && <div className="flex justify-between"><span className="text-muted">GST</span><span className="font-semibold text-plum">+{formatPrice(gstTotal)}</span></div>}
+              {otherChargeTotal > 0 && <div className="flex justify-between"><span className="text-muted">Other product charges</span><span className="font-semibold text-plum">+{formatPrice(otherChargeTotal)}</span></div>}
+              {codFeeTotal > 0 && <div className="flex justify-between"><span className="text-muted">COD fees (if selected)</span><span className="font-semibold text-plum">+{formatPrice(codFeeTotal)}</span></div>}
 
               <div className="flex justify-between">
                 <span className="text-muted">Shipping</span>

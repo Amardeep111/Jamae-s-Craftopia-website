@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Package, ChevronRight, ShoppingBag, Loader2 } from 'lucide-react'
 import { useUserStore } from '@/lib/user'
 import { formatPrice } from '@/data/products'
-import { STATUS_META } from '@/components/orders/orderConstants'
+import { STATUS_META, getPaymentStatusMeta } from '@/components/orders/orderConstants'
 
 const STATUS_TABS = [
   { value: 'ALL', label: 'All' },
@@ -227,7 +227,7 @@ function MyOrdersContent() {
                         <p className="mt-0.5 text-xs text-muted">{o.paymentMethod}</p>
                       )}
                       {o.paymentStatus && (
-                        <p className="text-xs text-muted">{o.paymentStatus}</p>
+                        <p className="text-xs text-muted">{getPaymentStatusMeta(o.paymentStatus).label}</p>
                       )}
                     </div>
 

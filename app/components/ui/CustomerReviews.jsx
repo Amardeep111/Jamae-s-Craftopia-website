@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import {
-  Star, ChevronLeft, ChevronRight, ThumbsUp,
-  Camera, Check, X, Filter, SortDesc, Sparkles, ShieldCheck
+  Star, ChevronLeft, ChevronRight, ThumbsUp, Camera, X, Filter
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
-import { getReviewsForProduct, getAverageRating, getRatingDistribution } from '@/data/reviews'
-import Button from './Button'
+import { getOptimizedImageUrl } from '@/lib/images'
 import Select from './Select'
+import Link from 'next/link'
 
 function StarRating({ rating, max = 5, size = 'md', interactive = false, onSelect }) {
   const sz = size === 'sm' ? 'h-3.5 w-3.5' : size === 'lg' ? 'h-6 w-6' : 'h-4 w-4'
@@ -29,11 +28,12 @@ function StarRating({ rating, max = 5, size = 'md', interactive = false, onSelec
         return (
           <button
             key={i}
-            type={interactive ? 'button' : 'span'}
+            type="button"
+            role={interactive ? 'radio' : undefined}
             onClick={interactive ? () => onSelect(starValue) : undefined}
             onMouseEnter={interactive ? () => setHoverStar(starValue) : undefined}
             aria-label={interactive ? `Rate ${starValue} stars` : undefined}
-            aria-selected={interactive ? starValue === rating : undefined}
+            aria-checked={interactive ? starValue === rating : undefined}
             disabled={!interactive}
             className={cn(
               'transition-transform duration-150 focus:outline-none',
@@ -56,9 +56,20 @@ function StarRating({ rating, max = 5, size = 'md', interactive = false, onSelec
 }
 
 export default function CustomerReviews({ product }) {
-  const reviews = useMemo(() => getReviewsForProduct(product?.id), [product?.id])
-  const avg = getAverageRating(reviews)
-  const counts = getRatingDistribution(reviews)
+  const [reviews, setReviews] = useState([])
+  const [reviewAccess, setReviewAccess] = useState({ authenticated: false, canReview: false })
+  const [productRating, setProductRating] = useState(0)
+  const [deliveryRating, setDeliveryRating] = useState(0)
+  const [packagingRating, setPackagingRating] = useState(0)
+  const [formTitle, setFormTitle] = useState('')
+  const [formText, setFormText] = useState('')
+  const [formPhotos, setFormPhotos] = useState([])
+  const [formPhotoPreviews, setFormPhotoPreviews] = useState([])
+  const [formError, setFormError] = useState('')
+  const [formSubmitting, setFormSubmitting] = useState(false)
+  const [formSuccess, setFormSuccess] = useState('')
+  const avg = reviews.length ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0
+  const counts = useMemo(() => Object.fromEntries([1, 2, 3, 4, 5].map((rating) => [rating, reviews.filter((review) => Math.round(review.rating) === rating).length])), [reviews])
   const total = reviews.length
 
   const [expanded, setExpanded] = useState(false)
@@ -67,13 +78,23 @@ export default function CustomerReviews({ product }) {
   const [lightbox, setLightbox] = useState({ open: false, images: [], index: 0 })
   const [helpful, setHelpful] = useState({})
 
-  const [formName, setFormName] = useState('')
-  const [formRating, setFormRating] = useState(0)
-  const [formText, setFormText] = useState('')
-  const [formPhotos, setFormPhotos] = useState([])
-  const [formError, setFormError] = useState('')
-  const [formSubmitting, setFormSubmitting] = useState(false)
-  const [formSuccess, setFormSuccess] = useState(false)
+  useEffect(() => {
+    const previews = formPhotos.map((file) => URL.createObjectURL(file))
+    setFormPhotoPreviews(previews)
+    return () => previews.forEach((url) => URL.revokeObjectURL(url))
+  }, [formPhotos])
+
+
+  const refreshReviews = useCallback(async () => {
+    const response = await fetch(`/api/reviews/${encodeURIComponent(product?.id || '')}`, { cache: 'no-store' })
+    const result = await response.json()
+    if (response.ok && result.success) {
+      setReviews(result.reviews || [])
+      setReviewAccess({ authenticated: Boolean(result.authenticated), canReview: Boolean(result.canReview) })
+    }
+  }, [product?.id])
+
+  useEffect(() => { refreshReviews().catch(() => {}) }, [refreshReviews])
 
   const openLightbox = useCallback((images, start = 0) => {
     setLightbox({ open: true, images, index: start })
@@ -94,7 +115,7 @@ export default function CustomerReviews({ product }) {
   // Sort + filter logic
   const sorted = useMemo(() => {
     let list = [...reviews]
-    if (filterStars > 0) list = list.filter((r) => r.rating === filterStars)
+    if (filterStars > 0) list = list.filter((r) => Math.round(r.rating) === filterStars)
     if (sortBy === 'newest') list.sort((a, b) => new Date(b.date) - new Date(a.date))
     if (sortBy === 'highest') list.sort((a, b) => b.rating - a.rating)
     if (sortBy === 'lowest') list.sort((a, b) => a.rating - b.rating)
@@ -112,27 +133,39 @@ export default function CustomerReviews({ product }) {
     return photos
   }, [reviews])
 
-  const submitReview = useCallback(() => {
+  const submitReview = useCallback(async (event) => {
+    event.preventDefault()
     setFormError('')
-    if (!formRating) { setFormError('Please select a star rating.')
+    setFormSuccess('')
+    if (!productRating || !deliveryRating || !packagingRating) { setFormError('Rate the product, delivery, and packaging to continue.')
       return }
-    if (!formName.trim()) { setFormError('Please enter your name.')
-      return }
-    if (!formText.trim()) { setFormError('Please share your experience.')
+    if (formText.trim().length < 5) { setFormError('Please share at least 5 characters about your experience.')
       return }
     if (formPhotos.length > 5) { setFormError('You can upload up to 5 photos.')
       return }
+    if (formPhotos.reduce((sum, file) => sum + file.size, 0) > 4 * 1024 * 1024) { setFormError('Review photos must be 4 MB total or smaller. Choose fewer or smaller images.')
+      return }
     setFormSubmitting(true)
-    setTimeout(() => {
-      setFormSubmitting(false)
-      setFormSuccess(true)
-      setFormName('')
-      setFormRating(0)
-      setFormText('')
-      setFormPhotos([])
-      setTimeout(() => setFormSuccess(false), 4000)
-    }, 1200)
-  }, [formRating, formName, formText, formPhotos.length])
+    try {
+      let images = []
+      if (formPhotos.length) {
+        const uploadForm = new FormData()
+        uploadForm.append('productId', product.id)
+        formPhotos.forEach((file) => uploadForm.append('files', file))
+        const uploadResponse = await fetch('/api/reviews/upload', { method: 'POST', body: uploadForm })
+        const uploadResult = await uploadResponse.json()
+        if (!uploadResponse.ok || !uploadResult.success) throw new Error(uploadResult.error || 'Review photos could not be uploaded.')
+        images = uploadResult.images
+      }
+      const response = await fetch(`/api/reviews/${encodeURIComponent(product.id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productRating, deliveryRating, packagingRating, title: formTitle, comment: formText, images }) })
+      const result = await response.json()
+      if (!response.ok || !result.success) throw new Error(result.error || 'Your review could not be saved.')
+      setFormSuccess(result.message || 'Thank you for sharing your review.')
+      setProductRating(0); setDeliveryRating(0); setPackagingRating(0); setFormTitle(''); setFormText(''); setFormPhotos([])
+      await refreshReviews()
+    } catch (error) { setFormError(error.message || 'Your review could not be saved.') }
+    finally { setFormSubmitting(false) }
+  }, [product?.id, productRating, deliveryRating, packagingRating, formText, formTitle, formPhotos, refreshReviews])
 
   return (
     <section className="container-page mt-16 pt-14 pb-12 border-t border-sand/60" aria-label="Customer Reviews">
@@ -168,6 +201,24 @@ export default function CustomerReviews({ product }) {
         </div>
       </div>
 
+      <section className="mt-10 rounded-3xl bg-cream p-5 shadow-soft ring-1 ring-sand sm:p-7" aria-label="Write a verified review">
+        <h3 className="font-display text-2xl text-plum">Your experience matters</h3>
+        {formSuccess && <p role="status" className="mt-3 text-sm text-green-800">{formSuccess}</p>}
+        {reviewAccess.canReview ? <form onSubmit={submitReview} className="mt-5 space-y-5">
+          <div className="grid gap-4 md:grid-cols-3">{[
+            ['Product quality', productRating, setProductRating],
+            ['Delivery experience', deliveryRating, setDeliveryRating],
+            ['Packaging', packagingRating, setPackagingRating],
+          ].map(([label, value, setter]) => <div key={label}><p className="text-sm font-semibold text-plum">{label}</p><div className="mt-2"><StarRating rating={value} interactive onSelect={setter} /></div></div>)}</div>
+          <label className="block text-sm font-medium text-plum">Review title <span className="font-normal text-muted">(optional)</span><input value={formTitle} onChange={(event) => setFormTitle(event.target.value)} maxLength={120} className="mt-1.5 min-h-11 w-full rounded-xl border border-sand bg-white px-3" placeholder="What stood out?" /></label>
+          <label className="block text-sm font-medium text-plum">Your review<textarea required minLength={5} maxLength={2000} value={formText} onChange={(event) => setFormText(event.target.value)} rows={4} className="mt-1.5 w-full rounded-xl border border-sand bg-white p-3" placeholder="Tell other shoppers about the product, packaging, and delivery." /></label>
+          <div><label htmlFor="review-photos" className="block text-sm font-medium text-plum">Add customer photos <span className="font-normal text-muted">(up to 5, 4 MB total)</span></label><input id="review-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setFormPhotos([...(event.target.files || [])].slice(0, 5))} className="mt-2 block w-full rounded-xl border border-sand bg-white p-2 text-sm file:mr-3 file:rounded-full file:border-0 file:bg-plum file:px-4 file:py-2 file:font-semibold file:text-cream" />{formPhotos.length > 0 && <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">{formPhotos.map((file, index) => <figure key={`${file.name}-${file.lastModified}`} className="overflow-hidden rounded-xl border border-sand bg-white"><img src={formPhotoPreviews[index]} alt={`Review photo preview ${index + 1}`} className="aspect-square w-full object-cover" /><figcaption className="truncate px-2 py-1 text-xs text-muted">{file.name}</figcaption></figure>)}</div>}</div>
+          {formError && <p role="alert" className="text-sm text-bloom">{formError}</p>}
+          <button disabled={formSubmitting} className="min-h-11 rounded-full bg-plum px-6 font-semibold text-cream disabled:opacity-60">{formSubmitting ? 'Posting review…' : 'Post verified review'}</button>
+          <p className="text-xs text-muted">Only customers with a delivered order can post one verified review per product.</p>
+        </form> : <p className="mt-2 max-w-2xl text-sm text-muted">{reviewAccess.authenticated ? 'You can write a verified review once this product has been delivered to you.' : <><Link className="font-semibold text-plum underline underline-offset-4" href={`/account/login?redirect=${encodeURIComponent(`/shop/${product?.id || ''}`)}`}>Sign in</Link> after delivery to rate the product, packaging, and delivery and share customer photos.</>}</p>}
+      </section>
+
       {/* ====== CUSTOMER PHOTO GALLERY ====== */}
       <div className="mt-14">
         <div className="flex items-center justify-between gap-2 mb-4">
@@ -190,7 +241,7 @@ export default function CustomerReviews({ product }) {
           </div>
         ) : allCustomerPhotos.length <= 5 ? (
           /* Compact equal-width grid when 5 or fewer photos */
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {allCustomerPhotos.map((photo, i) => (
               <button
                 key={`${photo.reviewName}-${i}`}
@@ -200,7 +251,7 @@ export default function CustomerReviews({ product }) {
                 aria-label={`View customer photo by ${photo.reviewName}`}
               >
                 <img
-                  src={photo.src}
+                  src={getOptimizedImageUrl(photo.src, { width: 420, quality: 80 })}
                   alt={`Customer photo by ${photo.reviewName}`}
                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                   loading="lazy"
@@ -321,24 +372,17 @@ export default function CustomerReviews({ product }) {
       <div className="mt-8 space-y-6">
         {sorted.length === 0 ? (
           <div className="rounded-3xl bg-ivory/50 p-8 text-center">
-            <p className="text-muted">No reviews match the current filters. Try changing the filter.</p>
-            <button
+            <p className="text-muted">{reviews.length ? 'No reviews match the current filters. Try changing the filter.' : 'No verified customer reviews yet. Customers can review the product, packaging, and delivery after the order arrives.'}</p>
+            {reviews.length > 0 && <button
               onClick={() => { setFilterStars(0); setSortBy('newest') }}
               className="mt-3 text-sm font-semibold text-bloom hover:text-plum underline underline-offset-4"
             >
               Clear filters
-            </button>
+            </button>}
           </div>
         ) : (
           sorted.map((review) => (
             <article key={review.id} className="paper-card p-6 md:p-8">
-              {/* Demo label */}
-              {review.isSample && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-sage/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sage mb-2">
-                  <ShieldCheck className="h-3 w-3" aria-hidden="true" /> Sample Review
-                </span>
-              )}
-
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -354,6 +398,7 @@ export default function CustomerReviews({ product }) {
                     <span aria-hidden="true">·</span>
                     <time dateTime={review.date}>{new Date(review.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</time>
                   </div>
+                  {review.productRating && <p className="mt-2 text-xs text-muted">Product {review.productRating}/5 · Packaging {review.packagingRating}/5 · Delivery {review.deliveryRating}/5</p>}
                 </div>
                 <div className="text-xs text-muted whitespace-nowrap">{review.place || 'Verified'}</div>
               </div>
@@ -375,7 +420,7 @@ export default function CustomerReviews({ product }) {
                       className="h-20 w-20 overflow-hidden rounded-xl ring-1 ring-sand hover:ring-bloom/40 transition focus:outline-none focus:ring-2 focus:ring-bloom/40 shrink-0"
                       aria-label={`View full photo ${pi + 1} from review by ${review.name}`}
                     >
-                      <img src={photo} alt={`Review photo by ${review.name}`} className="h-full w-full object-cover hover:scale-105 transition-transform duration-300" loading="lazy" />
+                      <img src={getOptimizedImageUrl(photo, { width: 480, quality: 80 })} alt={`Review photo by ${review.name}`} className="h-full w-full object-cover hover:scale-105 transition-transform duration-300" loading="lazy" />
                     </button>
                   ))}
                 </div>
@@ -396,27 +441,11 @@ export default function CustomerReviews({ product }) {
                   <ThumbsUp className={cn('h-3.5 w-3.5', helpful[review.id] && 'fill-bloom')} aria-hidden="true" />
                   Helpful {review.helpful + (helpful[review.id] ? 1 : 0)}
                 </button>
-                <button
-                  onClick={() => {
-                    alert(`Report submitted for moderation. The review by ${review.name} has been flagged.`)
-                  }}
-                  className="text-xs text-muted underline underline-offset-2 transition hover:text-bloom"
-                  aria-label={`Report review by ${review.name}`}
-                >
-                  Report
-                </button>
               </div>
             </article>
           ))
         )}
       </div>
-
-      {/* ====== LOAD MORE (simulated with demo data) ====== */}
-      {sorted.length > 0 && sorted.length >= reviews.length && (
-        <div className="mt-8 text-center">
-          <p className="text-sm text-muted">These are sample reviews for demonstration. Real customer reviews will replace them.</p>
-        </div>
-      )}
 
       {/* ====== LIGHTBOX ====== */}
       {lightbox.open && (

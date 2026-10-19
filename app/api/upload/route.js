@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server'
-import { put, del } from '@vercel/blob'
+import { getAdminSession } from '@/lib/auth/admin'
+import { uploadImageToStorage } from '@/lib/cloudinary'
+
+async function requireProductManager(request) {
+  return getAdminSession(request.cookies.get('jamaes_session')?.value, 'products.manage')
+}
 
 // POST - Upload image
 export async function POST(request) {
   try {
+    const session = await requireProductManager(request)
+    if (!session) return NextResponse.json({ success: false, error: 'You do not have permission to upload product images.' }, { status: 403 })
     const formData = await request.formData()
     const file = formData.get('file')
     const productId = formData.get('productId')
@@ -16,58 +23,20 @@ export async function POST(request) {
     }
 
     // Validate file type
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-    if (!validTypes.includes(file.type)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid file type' },
-        { status: 400 }
-      )
-    }
-
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json(
-        { success: false, error: 'File too large. Maximum size is 5MB' },
-        { status: 400 }
-      )
-    }
-
-    // Generate filename with timestamp
-    const timestamp = Date.now()
-    const extension = file.name.split('.').pop()
-    const filename = productId
-      ? `products/${productId}/${timestamp}.${extension}`
-      : `uploads/${timestamp}.${extension}`
-
-    // Upload to Vercel Blob (or return mock URL in development)
-    let url, pathname
-
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
-      // Production: upload to Vercel Blob
-      const blob = await put(filename, file, {
-        access: 'public',
-        addRandomSuffix: false,
-      })
-      url = blob.url
-      pathname = blob.pathname
-    } else {
-      // Development: simulate upload with local path
-      url = `/uploads/${filename}`
-      pathname = filename
-      console.log('Development mode: Image upload simulated', { url, pathname })
-    }
+    const folder = productId ? `jamaes-craftopia/products/${String(productId).replace(/[^a-zA-Z0-9_-]/g, '')}` : 'jamaes-craftopia/products'
+    const { url, publicId } = await uploadImageToStorage(file, folder)
 
     return NextResponse.json({
       success: true,
       url,
-      pathname,
+      publicId,
       message: 'Image uploaded successfully',
     })
   } catch (error) {
     console.error('Error uploading image:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to upload image' },
-      { status: 500 }
+      { success: false, error: error.message || 'Failed to upload image' },
+      { status: /not configured/i.test(error.message || '') ? 503 : /choose|4 MB|JPEG|PNG|WebP/i.test(error.message || '') ? 400 : 500 }
     )
   }
 }
@@ -75,6 +44,8 @@ export async function POST(request) {
 // DELETE - Delete image
 export async function DELETE(request) {
   try {
+    const session = await requireProductManager(request)
+    if (!session) return NextResponse.json({ success: false, error: 'You do not have permission to delete product images.' }, { status: 403 })
     const { url } = await request.json()
 
     if (!url) {
@@ -84,12 +55,7 @@ export async function DELETE(request) {
       )
     }
 
-    // Delete from Vercel Blob (or skip in development)
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
-      await del(url)
-    } else {
-      console.log('Development mode: Image deletion simulated', { url })
-    }
+    // Cloudinary deletion needs the public ID; old URL-only calls stay harmless.
 
     return NextResponse.json({
       success: true,

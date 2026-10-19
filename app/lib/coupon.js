@@ -14,11 +14,7 @@ import { persist } from 'zustand/middleware'
 
 export const COUPON_STORAGE_KEY = 'jamaes:coupon'
 
-export const DEMO_COUPONS = {
-  CRAFT10: { discount: 0.1, label: '10% off' },
-  WELCOME15: { discount: 0.15, label: '15% off' },
-  FIRSTORDER: { discount: 0.2, label: '20% off' },
-}
+export const DEMO_COUPONS = {}
 
 export const useCouponStore = create(
   persist(
@@ -27,19 +23,27 @@ export const useCouponStore = create(
       loading: false,
       error: '',
 
-      apply(code) {
+      async apply(code, subtotal) {
         const c = (code || '').trim().toUpperCase()
         if (!c) {
           set({ error: 'Please enter a coupon code.' })
           return false
         }
-        const match = DEMO_COUPONS[c]
-        if (!match) {
-          set({ error: "That coupon code isn't valid." })
+        set({ loading: true, error: '' })
+        try {
+          const response = await fetch('/api/coupons/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: c, subtotal }),
+          })
+          const result = await response.json()
+          if (!response.ok || !result.success) throw new Error(result.error || "That coupon code isn't valid.")
+          set({ coupon: result.data, error: '', loading: false })
+          return true
+        } catch (error) {
+          set({ error: error.message || 'Could not validate this coupon.', loading: false })
           return false
         }
-        set({ coupon: { code: c, ...match }, error: '', loading: false })
-        return true
       },
 
       remove() {

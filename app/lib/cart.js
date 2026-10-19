@@ -17,6 +17,16 @@ export const useCartStore = create(
   persist(
     (set, get) => ({
       items: [],
+      ownerUserId: null,
+
+      replaceItems(items) {
+        set({ items: Array.isArray(items) ? items : [] })
+        notifyChange()
+      },
+
+      setOwnerUserId(ownerUserId) {
+        set({ ownerUserId: ownerUserId || null })
+      },
 
       addItem(product, quantity = 1) {
         const items = get().items
@@ -25,7 +35,7 @@ export const useCartStore = create(
         if (existing) {
           set({
             items: items.map((i) =>
-              i.id === key ? { ...i, quantity: i.quantity + quantity } : i
+              i.id === key ? { ...i, quantity: Math.min(99, i.quantity + quantity) } : i
             ),
           })
         } else {
@@ -36,10 +46,16 @@ export const useCartStore = create(
                 id: product.id,
                 name: product.name,
                 price: product.price,
+                originalPrice: product.originalPrice ?? product.price,
+                discountPercent: product.discountPercent || 0,
+                gstPercent: product.gstPercent || 0,
+                codFee: product.codFee || 0,
+                otherCharge: product.otherCharge || 0,
+                allowedPaymentMethods: product.allowedPaymentMethods || ['upi'],
                 visual: product.visual,
                 palette: product.palette,
                 category: product.category,
-                quantity,
+                quantity: Math.min(99, quantity),
               },
             ],
           })
@@ -59,9 +75,18 @@ export const useCartStore = create(
         }
         set({
           items: get().items.map((i) =>
-            i.id === id ? { ...i, quantity } : i
+            i.id === id ? { ...i, quantity: Math.min(99, quantity) } : i
           ),
         })
+        notifyChange()
+      },
+
+      updateItemPrices(validatedItems) {
+        const detailsById = new Map(validatedItems.map((item) => [item.productId, item]))
+        set({ items: get().items.map((item) => {
+          const current = detailsById.get(item.id)
+          return current ? { ...item, price: current.unitPrice, originalPrice: current.originalPrice, discountPercent: current.discountPercent, gstPercent: current.gstPercent, gstAmount: current.gstAmount, codFee: current.codFee, otherCharge: current.otherCharge, allowedPaymentMethods: current.allowedPaymentMethods || ['upi'] } : item
+        }) })
         notifyChange()
       },
 

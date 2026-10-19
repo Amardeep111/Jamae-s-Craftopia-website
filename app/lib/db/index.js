@@ -80,34 +80,47 @@ export const db = {
       return mockDb.createOrder(data)
     }
 
-    return prisma.order.create({
-      data: {
-        orderNumber: `ORD-${Date.now()}`,
-        customerName: data.customerName,
-        customerEmail: data.customerEmail,
-        customerPhone: data.customerPhone,
-        shippingAddress: data.shippingAddress,
-        status: data.status || 'PENDING',
-        totalAmount: data.totalAmount,
-        paymentMethod: data.paymentMethod || null,
-        paymentStatus: data.paymentStatus || 'PAID',
-        notes: data.notes,
-        items: {
-          create: data.items.map(item => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            customization: item.customization,
-          })),
-        },
-      },
-      include: {
-        items: {
-          include: {
-            product: true,
+    return prisma.$transaction(async (tx) => {
+      for (const item of data.items) {
+        const reserved = await tx.product.updateMany({
+          where: { id: item.productId, stock: { gte: item.quantity } },
+          data: { stock: { decrement: item.quantity } },
+        })
+        if (!reserved.count) throw new Error(`Insufficient stock for ${item.productName || 'an item'}.`)
+      }
+
+      return tx.order.create({
+        data: {
+          orderNumber: `ORD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          customerName: data.customerName,
+          userId: data.userId,
+          customerEmail: data.customerEmail,
+          customerPhone: data.customerPhone,
+          shippingAddress: data.shippingAddress,
+          status: data.status || 'PENDING',
+          totalAmount: data.totalAmount,
+          subtotal: data.subtotal,
+          discount: data.discount || 0,
+          shipping: data.shipping || 0,
+          fee: data.fee || 0,
+          paymentMethod: data.paymentMethod || null,
+          paymentStatus: data.paymentStatus || 'PENDING',
+          notes: data.notes,
+          items: {
+            create: data.items.map(item => ({
+              productId: item.productId,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              gstPercent: item.gstPercent || 0,
+              gstAmount: item.gstAmount || 0,
+              codFee: item.codFee || 0,
+              otherCharge: item.otherCharge || 0,
+              customization: item.customization,
+            })),
           },
         },
-      },
+        include: { items: { include: { product: true } } },
+      })
     })
   },
 

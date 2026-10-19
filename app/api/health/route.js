@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { shouldUseMockData, testDatabaseConnection } from '@/lib/db'
+import { isEmailConfigured } from '@/lib/notification/email'
 
 export async function GET() {
   const useMock = shouldUseMockData()
@@ -15,6 +16,7 @@ export async function GET() {
       connected: dbConnected,
       type: useMock ? 'mock' : 'postgresql',
     },
+    email: { configured: isEmailConfigured(), provider: 'gmail-smtp' },
     timestamp: new Date().toISOString(),
   })
 }
