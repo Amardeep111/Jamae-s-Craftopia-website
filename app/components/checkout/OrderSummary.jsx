@@ -53,6 +53,25 @@ export default function OrderSummary() {
         <div className="border-t border-sand pt-2 mt-2 flex justify-between"><span className="font-medium text-plum">Before shipping / COD</span><span className="font-display text-xl text-plum">{formatPrice(finalTotal)}</span></div>
       </div>
 
+      <div className="mt-5 rounded-2xl bg-ivory/60 p-3 ring-1 ring-sand">
+        <label className="flex items-center gap-2 text-sm font-medium text-plum">Apply coupon
+          <input
+            aria-label="Coupon code"
+            placeholder="CODE20"
+            className="ml-2 flex-1 rounded-full border border-sand bg-white px-3 py-1.5 text-sm text-plum outline-none focus:ring-2 focus:ring-plum/20"
+            onKeyDown={async (e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                const input = e.currentTarget
+                const apply = useCouponStore.getState().apply
+                await apply(input.value, totalPrice)
+                input.value = ''
+              }
+            }}
+          />
+        </label>
+      </div>
+
       <div className="mt-4 rounded-2xl bg-ivory/60 p-3 text-xs text-muted flex items-start gap-2">
         <Truck className="h-4 w-4 text-bloom shrink-0 mt-0.5" aria-hidden="true" />
         <p>Handmade pieces — ships within 3–5 days. Delivery address selected above will be saved.</p>
