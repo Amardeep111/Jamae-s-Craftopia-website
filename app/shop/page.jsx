@@ -88,7 +88,7 @@ function ShopContent() {
           </label>
         </div>
 
-        <div className="relative z-10 mt-6 flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Categories">
+        <div className="relative z-10 mt-2 pt-4 flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Categories">
           {categories.map((cat) => (
             <button
               key={cat.id}
