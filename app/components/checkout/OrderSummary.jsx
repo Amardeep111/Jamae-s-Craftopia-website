@@ -5,12 +5,20 @@ import { formatPrice } from '@/data/products'
 import { useCartStore } from '@/lib/cart'
 import { useCouponStore } from '@/lib/coupon'
 import { couponDiscountAmount } from '@/lib/coupon'
+import { useEffect } from 'react'
 
 export default function OrderSummary() {
   const items = useCartStore((s) => s.items)
   const coupon = useCouponStore((s) => s.coupon)
   const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
+
+  useEffect(() => {
+    const store = useCouponStore.getState()
+    if (store.coupon && store.revalidate) {
+      store.revalidate(totalPrice)
+    }
+  }, [totalPrice, items])
 
   const discount = couponDiscountAmount(coupon, totalPrice)
   const gstTotal = items.reduce((sum, item) => sum + (item.gstAmount || Math.round(item.price * (item.gstPercent || 0) / 100)) * item.quantity, 0)

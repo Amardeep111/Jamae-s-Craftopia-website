@@ -352,8 +352,17 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ success: true, data: updated })
     }
     if (resource === 'coupons') {
-      if (typeof body.id !== 'string' || typeof body.active !== 'boolean') return NextResponse.json({ success: false, error: 'Coupon and active status are required.' }, { status: 400 })
-      const updated = await prisma.coupon.update({ where: { id: body.id }, data: { active: body.active } })
+      if (typeof body.id !== 'string' || !body.id) return NextResponse.json({ success: false, error: 'Coupon ID is required.' }, { status: 400 })
+      const data = {}
+      if (body.active !== undefined && typeof body.active === 'boolean') data.active = body.active
+      if (body.firstTimeOnly !== undefined && typeof body.firstTimeOnly === 'boolean') data.firstTimeOnly = body.firstTimeOnly
+      if (body.maxUses !== undefined) {
+        const maxUses = Number(body.maxUses)
+        if (!Number.isInteger(maxUses) || maxUses < 0) return NextResponse.json({ success: false, error: 'Max uses must be a non-negative whole number.' }, { status: 400 })
+        data.maxUses = maxUses
+      }
+      if (!Object.keys(data).length) return NextResponse.json({ success: false, error: 'No coupon changes provided.' }, { status: 400 })
+      const updated = await prisma.coupon.update({ where: { id: body.id }, data })
       return NextResponse.json({ success: true, data: updated })
     }
     if (resource === 'settings') {
@@ -443,9 +452,13 @@ export async function POST(request, { params }) {
     if (!/^[A-Z0-9_-]{3,24}$/.test(code) || !label || !Number.isInteger(discountPercent) || discountPercent < 1 || discountPercent > 100 || !Number.isInteger(minSubtotal) || minSubtotal < 0) {
       return NextResponse.json({ success: false, error: 'Enter a valid code, label, 1–100% discount, and non-negative minimum cart.' }, { status: 400 })
     }
+    const maxUsesBody = Number(body.maxUses ?? 0)
+    if (!Number.isInteger(maxUsesBody) || maxUsesBody < 0) return NextResponse.json({ success: false, error: 'Max uses must be a non-negative whole number.' }, { status: 400 })
     const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null
     if (expiresAt && Number.isNaN(expiresAt.getTime())) return NextResponse.json({ success: false, error: 'Enter a valid expiry date.' }, { status: 400 })
-    const coupon = await prisma.coupon.create({ data: { code, label, discountPercent, minSubtotal, expiresAt } })
+    const firstTimeOnly = body.firstTimeOnly === true
+    const maxUses = maxUsesBody
+    const coupon = await prisma.coupon.create({ data: { code, label, discountPercent, minSubtotal, expiresAt, firstTimeOnly, maxUses, currentUses: 0 } })
     return NextResponse.json({ success: true, data: coupon }, { status: 201 })
   } catch (error) {
     if (error.code === 'P2002') return NextResponse.json({ success: false, error: 'That coupon code already exists.' }, { status: 409 })

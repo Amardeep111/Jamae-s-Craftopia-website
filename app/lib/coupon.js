@@ -5,9 +5,13 @@
  * reads from (`jamaes:coupon`), so any previously-applied coupon survives a
  * reload and every checkout step sees the same discount.
  *
- * The coupon itself is just { code, discount, label }. Discount is a fraction
- * of the subtotal (e.g. 0.1 = 10%). The actual discount amount is computed
- * from the live subtotal in the pricing layer, never stored here.
+ * The coupon itself is { code, discount, label, minSubtotal }. Discount is a
+ * fraction of the subtotal (e.g. 0.1 = 10%). The actual discount amount is
+ * computed from the live subtotal in the pricing layer, never stored here.
+ *
+ * A coupon only stays applied while the cart subtotal is >= its minSubtotal.
+ * Call `revalidate(subtotal)` whenever the cart changes; if the subtotal has
+ * dropped below the minimum the coupon is removed and an error is surfaced.
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -38,12 +42,37 @@ export const useCouponStore = create(
           })
           const result = await response.json()
           if (!response.ok || !result.success) throw new Error(result.error || "That coupon code isn't valid.")
-          set({ coupon: result.data, error: '', loading: false })
+          const applied = result.data
+          // The server already enforces minSubtotal for the subtotal it was
+          // given, but re-check here so a stale/incorrect subtotal can never
+          // leave an invalid coupon applied.
+          if (!couponMeetsMinSubtotal(applied, subtotal)) {
+            set({ coupon: null, error: minSubtotalError(applied), loading: false })
+            return false
+          }
+          set({ coupon: applied, error: '', loading: false })
           return true
         } catch (error) {
           set({ error: error.message || 'Could not validate this coupon.', loading: false })
           return false
         }
+      },
+
+      /**
+       * Re-check an already-applied coupon against a (new) subtotal.
+       * Returns true when the coupon stays applied, false when it was
+       * invalidated and removed because the subtotal fell below minSubtotal.
+       */
+      revalidate(subtotal) {
+        const { coupon } = get()
+        if (!coupon) return true
+        if (couponMeetsMinSubtotal(coupon, subtotal)) {
+          // Still valid — clear any stale min-subtotal error.
+          if (get().error) set({ error: '' })
+          return true
+        }
+        set({ coupon: null, error: minSubtotalError(coupon), loading: false })
+        return false
       },
 
       remove() {
@@ -59,6 +88,16 @@ export const useCouponStore = create(
     }
   )
 )
+
+function couponMeetsMinSubtotal(coupon, subtotal) {
+  const min = coupon && (coupon.minSubtotal != null) ? Number(coupon.minSubtotal) : 0
+  return Number(subtotal) >= min
+}
+
+function minSubtotalError(coupon) {
+  const min = coupon && (coupon.minSubtotal != null) ? coupon.minSubtotal : 0
+  return `This coupon requires a minimum cart of ₹${min}.`
+}
 
 export function couponDiscountAmount(coupon, subtotal) {
   if (!coupon || !subtotal) return 0

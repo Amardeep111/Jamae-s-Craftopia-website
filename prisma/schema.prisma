@@ -248,10 +248,25 @@ model Coupon {
   minSubtotal    Int      @default(0)
   active         Boolean  @default(true)
   expiresAt      DateTime?
+  firstTimeOnly  Boolean  @default(false)
+  maxUses        Int      @default(0)
+  currentUses    Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  usages         CouponUsage[]
 
   @@index([active, expiresAt])
+}
+
+model CouponUsage {
+  id        String   @id @default(cuid())
+  couponId  String
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId    String?
+  used      Boolean  @default(true)
+  usedAt    DateTime @default(now())
+
+  @@index([userId, couponId])
 }
 
 model StoreSetting {
