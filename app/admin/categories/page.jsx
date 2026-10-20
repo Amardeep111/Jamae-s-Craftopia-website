@@ -120,11 +120,13 @@ export default function AdminCategories() {
 
   async function toggleVisibility(cat) {
     setBusyId(cat.id); setError('')
+    const newPublished = !cat.published
+    const newHidden = newPublished ? false : true
     try {
       const response = await fetch('/api/admin/categories', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: cat.id, published: !cat.published, hidden: !cat.published ? true : false })
+        body: JSON.stringify({ id: cat.id, published: newPublished, hidden: newHidden })
       })
       const result = await response.json()
       if (!response.ok || !result.success) throw new Error(result.error || 'Could not update category.')
