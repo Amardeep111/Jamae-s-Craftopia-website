@@ -60,6 +60,7 @@ export const db = {
     }
 
     return prisma.category.findMany({
+      where: { hidden: false, published: true },
       orderBy: { order: 'asc' },
     })
   },

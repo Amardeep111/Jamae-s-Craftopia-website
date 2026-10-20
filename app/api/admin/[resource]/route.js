@@ -51,7 +51,7 @@ function productText(body, field, maxLength, required = false) {
 export async function GET(request, { params }) {
   const { resource: rawResource } = await params
   const resource = rawResource === 'custom-requests' ? 'customRequests' : rawResource
-  const permission = { dashboard: 'dashboard.view', orders: 'orders.view', customRequests: 'customRequests.view', products: 'products.view', users: 'users.view', coupons: 'coupons.view', settings: 'settings.view' }[resource]
+  const permission = { dashboard: 'dashboard.view', orders: 'orders.view', customRequests: 'customRequests.view', products: 'products.view', users: 'users.view', coupons: 'coupons.view', categories: 'categories.view', settings: 'settings.view' }[resource]
   if (!permission) return NextResponse.json({ success: false, error: 'Unknown admin resource.' }, { status: 404 })
   const session = await getAdminSession(request.cookies.get('jamaes_session')?.value, permission)
   if (!session) return NextResponse.json({ success: false, error: 'You do not have permission to view this section.' }, { status: 403 })
@@ -62,6 +62,10 @@ export async function GET(request, { params }) {
         prisma.order.count({ where: { status: 'PENDING' } }),
       ])
       return NextResponse.json({ success: true, data: { orders, users, products, pending } })
+    }
+    if (resource === 'categories') {
+      const data = await prisma.category.findMany({ orderBy: { order: 'asc' } })
+      return NextResponse.json({ success: true, data })
     }
     if (resource === 'orders') {
       const data = await prisma.order.findMany({ orderBy: { createdAt: 'desc' }, include: { items: { include: { product: true } }, refundRequests: { orderBy: { createdAt: 'desc' } } } })
@@ -97,7 +101,7 @@ export async function GET(request, { params }) {
 export async function PATCH(request, { params }) {
   const { resource: rawResource } = await params
   const resource = rawResource === 'custom-requests' ? 'customRequests' : rawResource
-  const permission = { orders: 'orders.manage', customRequests: 'customRequests.manage', products: 'products.manage', users: 'users.manage', coupons: 'coupons.manage', settings: 'settings.manage' }[resource]
+  const permission = { orders: 'orders.manage', customRequests: 'customRequests.manage', products: 'products.manage', users: 'users.manage', coupons: 'coupons.manage', categories: 'categories.manage', settings: 'settings.manage' }[resource]
   if (!permission) return NextResponse.json({ success: false, error: 'This resource cannot be updated.' }, { status: 405 })
   const session = await getAdminSession(request.cookies.get('jamaes_session')?.value, permission)
   if (!session) return NextResponse.json({ success: false, error: 'You do not have permission to make changes in this section.' }, { status: 403 })
@@ -312,6 +316,41 @@ export async function PATCH(request, { params }) {
       const updated = await prisma.product.update({ where: { id: body.id }, data })
       return NextResponse.json({ success: true, data: updated })
     }
+    if (resource === 'categories') {
+      if (typeof body.id !== 'string') return NextResponse.json({ success: false, error: 'Category ID is required.' }, { status: 400 })
+      const data = {}
+      const name = typeof body.name === 'string' ? body.name.trim() : ''
+      if (name === '') return NextResponse.json({ success: false, error: 'Category name is required.' }, { status: 400 })
+      if (name && name.length > 120) return NextResponse.json({ success: false, error: 'Category name must be under 120 characters.' }, { status: 400 })
+      if (name) data.name = name
+      if (body.slug !== undefined) {
+        const slugValue = typeof body.slug === 'string' ? body.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 120) : ''
+        if (!slugValue) return NextResponse.json({ success: false, error: 'Enter a valid URL slug.' }, { status: 400 })
+        const conflict = await prisma.category.findUnique({ where: { slug: slugValue }, select: { id: true } })
+        if (conflict && conflict.id !== body.id) return NextResponse.json({ success: false, error: 'That category URL is already in use.' }, { status: 409 })
+        data.slug = slugValue
+      }
+      if (body.description !== undefined) {
+        const desc = typeof body.description === 'string' ? body.description.trim() : ''
+        if (desc && desc.length > 2000) return NextResponse.json({ success: false, error: 'Description too long.' }, { status: 400 })
+        data.description = desc || null
+      }
+      if (body.accent !== undefined) {
+        data.accent = typeof body.accent === 'string' && body.accent.trim() ? body.accent.trim() : null
+      }
+      if (body.image !== undefined) {
+        const img = typeof body.image === 'string' ? body.image.trim() : ''
+        data.image = img ? img : null
+      }
+      if (body.order !== undefined) {
+        const order = Number(body.order)
+        if (!Number.isInteger(order) || order < 0) return NextResponse.json({ success: false, error: 'Order must be a non-negative whole number.' }, { status: 400 })
+        data.order = order
+      }
+      if (!Object.keys(data).length) return NextResponse.json({ success: false, error: 'No category changes provided.' }, { status: 400 })
+      const updated = await prisma.category.update({ where: { id: body.id }, data })
+      return NextResponse.json({ success: true, data: updated })
+    }
     if (resource === 'coupons') {
       if (typeof body.id !== 'string' || typeof body.active !== 'boolean') return NextResponse.json({ success: false, error: 'Coupon and active status are required.' }, { status: 400 })
       const updated = await prisma.coupon.update({ where: { id: body.id }, data: { active: body.active } })
@@ -336,8 +375,8 @@ export async function PATCH(request, { params }) {
 
 export async function POST(request, { params }) {
   const { resource } = await params
-  if (!['coupons', 'products'].includes(resource)) return NextResponse.json({ success: false, error: 'Creation is not supported for this resource.' }, { status: 405 })
-  const permission = resource === 'products' ? 'products.manage' : 'coupons.manage'
+  if (!['coupons', 'products', 'categories'].includes(resource)) return NextResponse.json({ success: false, error: 'Creation is not supported for this resource.' }, { status: 405 })
+  const permission = resource === 'products' ? 'products.manage' : resource === 'categories' ? 'categories.manage' : 'coupons.manage'
   const session = await getAdminSession(request.cookies.get('jamaes_session')?.value, permission)
   if (!session) return NextResponse.json({ success: false, error: `You do not have permission to create ${resource}.` }, { status: 403 })
   try {
@@ -380,6 +419,22 @@ export async function POST(request, { params }) {
       const availableForSale = body.availableForSale !== false
       const product = await prisma.product.create({ data: { name, slug: uniqueSlug, categoryId, price, stock, discountPercent, gstPercent, codFee, otherCharge, short, description, ...textFields, images, featured, published, availableForSale, unavailableStates, unavailablePinCodes, allowedPaymentMethods } })
       return NextResponse.json({ success: true, data: product }, { status: 201 })
+    }
+    if (resource === 'categories') {
+      const name = typeof body.name === 'string' ? body.name.trim() : ''
+      if (!name || name.length > 120) return NextResponse.json({ success: false, error: 'Enter a category name (max 120 characters).' }, { status: 400 })
+      const baseSlug = (typeof body.slug === 'string' && body.slug.trim() ? body.slug : name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 120)
+      if (!baseSlug) return NextResponse.json({ success: false, error: 'Enter a valid URL slug.' }, { status: 400 })
+      let uniqueSlug = baseSlug
+      let suffix = 2
+      while (await prisma.category.findUnique({ where: { slug: uniqueSlug }, select: { id: true } })) uniqueSlug = `${baseSlug.slice(0, 110)}-${suffix++}`
+      const description = typeof body.description === 'string' ? body.description.trim() : ''
+      if (description.length > 2000) return NextResponse.json({ success: false, error: 'Description must be under 2,000 characters.' }, { status: 400 })
+      const accent = typeof body.accent === 'string' && body.accent.trim() ? body.accent.trim() : null
+      const image = typeof body.image === 'string' && body.image.trim() ? body.image.trim() : null
+      const order = Number(body.order)
+      const category = await prisma.category.create({ data: { name, slug: uniqueSlug, description: description || null, accent, image, order: Number.isInteger(order) && order >= 0 ? order : 0 } })
+      return NextResponse.json({ success: true, data: category }, { status: 201 })
     }
     const code = typeof body.code === 'string' ? body.code.trim().toUpperCase() : ''
     const label = typeof body.label === 'string' ? body.label.trim() : ''
