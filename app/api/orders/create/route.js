@@ -236,23 +236,6 @@ export async function POST(request) {
         }
       }
 
-      // Only record usage when the coupon was actually honoured.
-      if (txCoupon && txCouponUsable) {
-        await tx.coupon.update({
-          where: { id: txCoupon.id },
-          data: { currentUses: { increment: 1 } },
-        })
-        if (session?.user?.id) {
-          await tx.couponUsage.create({
-            data: {
-              couponId: txCoupon.id,
-              userId: session.user.id,
-              used: true,
-            },
-          })
-        }
-      }
-
       // Reserve stock atomically
       const date = new Date()
       const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`
@@ -307,6 +290,25 @@ export async function POST(request) {
           },
         },
       })
+
+      // The coupon is only consumed once the order itself was created
+      // successfully. If the insert above throws, the whole transaction rolls
+      // back and the coupon is never counted as used.
+      if (txCoupon && txCouponUsable) {
+        await tx.coupon.update({
+          where: { id: txCoupon.id },
+          data: { currentUses: { increment: 1 } },
+        })
+        if (session?.user?.id) {
+          await tx.couponUsage.create({
+            data: {
+              couponId: txCoupon.id,
+              userId: session.user.id,
+              used: true,
+            },
+          })
+        }
+      }
 
       return newOrder
     })

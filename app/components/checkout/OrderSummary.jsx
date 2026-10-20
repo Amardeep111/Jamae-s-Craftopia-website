@@ -5,11 +5,12 @@ import { formatPrice } from '@/data/products'
 import { useCartStore } from '@/lib/cart'
 import { useCouponStore } from '@/lib/coupon'
 import { couponDiscountAmount } from '@/lib/coupon'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function OrderSummary() {
   const items = useCartStore((s) => s.items)
   const coupon = useCouponStore((s) => s.coupon)
+  const [suggestions, setSuggestions] = useState([])
   const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
 
@@ -19,6 +20,23 @@ export default function OrderSummary() {
       store.revalidate(totalPrice)
     }
   }, [totalPrice, items])
+
+  useEffect(() => {
+    fetch('/api/coupons').then(async (r) => {
+      try {
+        if (!r.ok) return
+        const j = await r.json()
+        if (j.success && j.data) {
+          const opts = j.data.map((c) => ({ code: c.code, label: c.label || c.code }))
+          setSuggestions(opts)
+        }
+      } catch {
+        // Coupon suggestions are optional — never block checkout.
+      }
+    }).catch(() => {
+      // Fetch failure should not break the order flow.
+    })
+  }, [])
 
   const discount = couponDiscountAmount(coupon, totalPrice)
   const gstTotal = items.reduce((sum, item) => sum + (item.gstAmount || Math.round(item.price * (item.gstPercent || 0) / 100)) * item.quantity, 0)
@@ -34,8 +52,8 @@ export default function OrderSummary() {
       <ul className="divide-y divide-sand">
         {items.map((item) => (
           <li key={item.id} className="flex items-center gap-3 py-3">
-            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-sand">
-              <img src={item.visual || item.image || ''} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
+            <div className="rounded-full h-12 w-12 shrink-0 overflow-hidden bg-gradient-to-br from-blush/40 to-bloom/20 ring-1 ring-sand">
+              <img src={item.visual ? (item.visual.startsWith("http") ? item.visual : "/images/"+item.visual+".jpg") : (item.image || "")} alt={item.name} className="h-full w-full object-cover" loading="lazy" onError={e=>{e.currentTarget.style.display="none";e.currentTarget.parentElement.classList.add("bg-plum/10")}} />
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-plum truncate">{item.name}</p>
@@ -65,18 +83,27 @@ export default function OrderSummary() {
         <label className="flex items-center gap-2 text-sm font-medium text-plum">Apply coupon
           <input
             aria-label="Coupon code"
-            placeholder="CODE20"
+            placeholder="Enter CODE"
+            list="coupon-suggestions"
             className="ml-2 flex-1 rounded-full border border-sand bg-white px-3 py-1.5 text-sm text-plum outline-none focus:ring-2 focus:ring-plum/20"
             onKeyDown={async (e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
                 const input = e.currentTarget
                 const apply = useCouponStore.getState().apply
-                await apply(input.value, totalPrice)
+                const code = input.value.trim().toUpperCase()
+                if (!code) return
                 input.value = ''
+                await apply(code, totalPrice)
               }
             }}
           />
+
+        <datalist id="coupon-suggestions">
+          {suggestions.map((s) => (
+            <option key={s.code} value={s.code}>{s.label}</option>
+          ))}
+        </datalist>
         </label>
       </div>
 

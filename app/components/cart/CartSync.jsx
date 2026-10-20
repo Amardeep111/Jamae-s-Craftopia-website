@@ -41,7 +41,8 @@ export default function CartSync() {
     let active = true
     if (!userId) {
       readyUserId.current = null
-      if (initializedUserId.current) {
+      // Only wipe cart if user explicitly logged out (session invalid), not on navigation
+      if (initializedUserId.current && !useUserStore.getState().userId) {
         useCartStore.getState().replaceItems([])
         useCartStore.getState().setOwnerUserId(null)
         initializedUserId.current = null

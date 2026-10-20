@@ -224,6 +224,13 @@ export async function PATCH(request, { params }) {
       if (!Object.keys(data).length) return NextResponse.json({ success: false, error: 'No order changes provided.' }, { status: 400 })
       const updated = await prisma.$transaction(async (tx) => {
         const saved = await tx.order.update({ where: { id: body.id }, data })
+        // If order is returned, restore product stock for items
+        if (body.status === 'RETURNED' && current.status !== 'RETURNED') {
+          const orderItems = await tx.orderItem.findMany({ where: { orderId: body.id }, select: { productId: true, quantity: true } })
+          for (const item of orderItems) {
+            await tx.product.update({ where: { id: item.productId }, data: { stock: { increment: item.quantity } } })
+          }
+        }
         if (body.paymentStatus && body.paymentStatus !== current.paymentStatus) {
           await tx.paymentLog.create({
             data: {
