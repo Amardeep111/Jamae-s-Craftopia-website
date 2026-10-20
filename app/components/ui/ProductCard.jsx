@@ -13,7 +13,7 @@ import { discountedPrice, useProductDiscount } from '@/lib/promotions'
 export default function ProductCard({ product, className }) {
   const discountPercent = useProductDiscount(product.id)
   const salePrice = discountedPrice(product.price, discountPercent)
-  const category = categories.find((c) => c.id === product.category)
+  const categoryName = product.categoryName || product.category?.name || null
   const photo = product.image || product.images?.[0]
 
   return (
@@ -37,7 +37,7 @@ export default function ProductCard({ product, className }) {
       </Link>
       <div className="flex flex-1 flex-col p-5">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-bloom">
-          {category?.name}
+          {categoryName}
         </p>
         <h3 className="mt-2 font-display text-2xl text-plum">
           <Link href={`/shop/${product.id}`} className="transition hover:text-bloom">

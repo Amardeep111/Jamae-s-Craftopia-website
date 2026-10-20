@@ -22,7 +22,10 @@ export const db = {
     }
 
     return prisma.product.findMany({
-      where,
+      where: {
+        ...where,
+        category: where.categoryId ? { hidden: false, published: true } : undefined,
+      },
       take: filters.limit,
       include: {
         category: true,

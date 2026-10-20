@@ -18,7 +18,16 @@ export async function GET(request) {
     filters.published = true
 
     const products = await db.getProducts(filters)
-    const publicProducts = products.map((product) => ({ ...product, category: product.categoryId || product.category, image: product.imageUrl || product.image || product.images?.[0] || null }))
+    const publicProducts = products.map((product) => {
+      const categorySlug = product.category?.slug || product.categorySlug || product.categoryId || null
+      return {
+        ...product,
+        category: categorySlug,
+        categoryId: product.categoryId,
+        categoryName: product.category?.name || null,
+        image: product.imageUrl || product.image || product.images?.[0] || null,
+      }
+    })
 
     return NextResponse.json({
       success: true,
