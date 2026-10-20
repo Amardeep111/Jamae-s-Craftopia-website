@@ -209,7 +209,7 @@ export default function ProductDetails({ params }) {
                 onClick={() => {
                   if (outOfStock || locationRestricted) return
                   addItem(cartProduct, qty)
-                  window.location.href = '/checkout'
+                  window.location.href = '/checkout/address'
                 }}
               >
                 Buy Now

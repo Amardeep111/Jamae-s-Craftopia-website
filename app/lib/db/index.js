@@ -22,7 +22,10 @@ export const db = {
     }
 
     return prisma.product.findMany({
-      where,
+      where: {
+        ...where,
+        category: where.categoryId ? { hidden: false, published: true } : undefined,
+      },
       take: filters.limit,
       include: {
         category: true,
@@ -60,6 +63,7 @@ export const db = {
     }
 
     return prisma.category.findMany({
+      where: { hidden: false, published: true },
       orderBy: { order: 'asc' },
     })
   },
@@ -190,6 +194,51 @@ export const db = {
         items: { include: { product: true } },
       },
     })
+  },
+
+  async getCouponByCode(code) {
+    if (shouldUseMockData()) return null
+    return prisma.coupon.findUnique({ where: { code: code.trim().toUpperCase() } })
+  },
+
+  async recordCouponUsage({ couponId, userId }) {
+    if (shouldUseMockData()) return { id: `usage_${Date.now()}` }
+    return prisma.couponUsage.create({
+      data: { couponId, userId: userId || null, used: true },
+    })
+  },
+
+  // Coupon Usage
+  async getCouponUsage(couponId, userId) {
+    if (shouldUseMockData()) {
+      return null
+    }
+    return prisma.couponUsage.findFirst({
+      where: {
+        couponId,
+        userId: userId || null,
+      },
+    })
+  },
+
+  async incrementCouponUse(couponId, userId) {
+    if (shouldUseMockData()) {
+      return { id: `usage_${Date.now()}` }
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.coupon.update({
+        where: { id: couponId },
+        data: { currentUses: { increment: 1 } },
+      })
+      await tx.couponUsage.create({
+        data: {
+          couponId,
+          userId: userId || null,
+          used: true,
+        },
+      })
+    })
+    return { success: true }
   },
 
   // Custom Requests

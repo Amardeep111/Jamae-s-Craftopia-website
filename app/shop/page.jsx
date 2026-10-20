@@ -3,8 +3,6 @@
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
-import { categories } from '@/data/categories'
-import { products } from '@/data/products'
 import PageHeader from '@/components/layout/PageHeader'
 import EmptyState from '@/components/ui/EmptyState'
 import ProductCard from '@/components/ui/ProductCard'
@@ -23,13 +21,23 @@ function ShopContent() {
   const category = searchParams.get('category') || 'all'
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('featured')
-  const [catalog, setCatalog] = useState(products)
+  const [catalog, setCatalog] = useState([])
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let active = true
-    fetch('/api/products?limit=500', { cache: 'no-store' }).then((response) => response.json()).then((result) => {
-      if (active && result.success && Array.isArray(result.data)) setCatalog(result.data)
-    }).catch(() => {})
+    Promise.all([
+      fetch('/api/categories', { cache: 'no-store' }).then((r) => r.json()),
+      fetch('/api/products?limit=500', { cache: 'no-store' }).then((r) => r.json()),
+    ])
+      .then(([categoriesResult, productsResult]) => {
+        if (!active) return
+        if (categoriesResult?.success && Array.isArray(categoriesResult.data)) setCategories(categoriesResult.data)
+        if (productsResult?.success && Array.isArray(productsResult.data)) setCatalog(productsResult.data)
+      })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [])
 
@@ -42,7 +50,10 @@ function ShopContent() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    let list = catalog.filter((p) => (category === 'all' ? true : p.category === category))
+    let list = catalog.filter((p) => {
+      if (category === 'all') return true
+      return (p.category?.slug || p.categorySlug || p.categoryId) === category
+    })
     if (q) {
       list = list.filter(
         (p) =>
@@ -89,6 +100,18 @@ function ShopContent() {
         </div>
 
         <div className="relative z-10 mt-2 pt-4 flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Categories">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={category === 'all'}
+            onClick={() => setCategory('all')}
+            className={cn(
+              'relative z-10 shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition',
+              category === 'all' ? 'bg-plum text-cream' : 'bg-ivory text-plum ring-1 ring-sand hover:bg-blush/50',
+            )}
+          >
+            All
+          </button>
           {categories.map((cat) => (
             <button
               key={cat.id}
@@ -98,9 +121,7 @@ function ShopContent() {
               onClick={() => setCategory(cat.slug)}
               className={cn(
                 'relative z-10 shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition',
-                category === cat.slug
-                  ? 'bg-plum text-cream'
-                  : 'bg-ivory text-plum ring-1 ring-sand hover:bg-blush/50',
+                category === cat.slug ? 'bg-plum text-cream' : 'bg-ivory text-plum ring-1 ring-sand hover:bg-blush/50',
               )}
             >
               {cat.name}

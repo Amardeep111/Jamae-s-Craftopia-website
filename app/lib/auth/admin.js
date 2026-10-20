@@ -5,7 +5,9 @@ export const ADMIN_PERMISSIONS = ADMIN_PERMISSION_IDS
 export const ADMIN_ROLES = new Set(['ADMIN', 'SUPERADMIN'])
 
 export function hasAdminPermission(user, permission) {
-  if (!user || user.adminActive === false) return false
+  if (!user) return false
+  if (!ADMIN_ROLES.has(user.role)) return false
+  if (user.adminActive === false) return false
   if (user?.role === 'SUPERADMIN') return true
   if (user.role !== 'ADMIN') return false
   if (!permission) return true

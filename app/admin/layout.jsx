@@ -34,6 +34,7 @@ export default async function AdminLayout({ children }) {
           {can('customRequests.view') && <AdminNavLink href="/admin/custom-requests" icon={<ClipboardList className="h-4 w-4" />} label="Custom requests" />}
           {can('products.view') && <AdminNavLink href="/admin/products" icon={<CheckCircle className="h-4 w-4" />} label="Products" />}
           {can('users.view') && <AdminNavLink href="/admin/users" icon={<Users className="h-4 w-4" />} label="Customers" />}
+          {can('categories.view') && <AdminNavLink href="/admin/categories" icon={<Tag className="h-4 w-4" />} label="Categories" />}
           {can('coupons.view') && <AdminNavLink href="/admin/coupons" icon={<Tag className="h-4 w-4" />} label="Coupons" />}
           {can('settings.view') && <AdminNavLink href="/admin/settings" icon={<Settings className="h-4 w-4" />} label="Payment settings" />}
           {isSuperadmin && <AdminNavLink href="/admin/admins" icon={<Shield className="h-4 w-4" />} label="Admin access" />}
