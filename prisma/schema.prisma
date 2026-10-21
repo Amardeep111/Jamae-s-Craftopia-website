@@ -57,15 +57,16 @@ model Product {
   unavailablePinCodes String[] @default([])
   allowedPaymentMethods String[] @default(["upi"])
   createdAt      DateTime @default(now())
+
+  @@index([categoryId], map: "idx_product_category_id")
+  @@index([featured], map: "idx_product_featured")
+  @@index([published], map: "idx_product_published")
+  @@index([categoryId, featured, published], map: "idx_product_cfp")
+  @@index([name, short], map: "idx_product_name_short")
   updatedAt      DateTime @updatedAt
   orderItems     OrderItem[]
   cartItems      CartItem[]
   reviews        Review[]
-
-  @@index([slug])
-  @@index([categoryId])
-  @@index([featured])
-  @@index([published])
 }
 
 model Order {

@@ -7,6 +7,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import EmptyState from '@/components/ui/EmptyState'
 import ProductCard from '@/components/ui/ProductCard'
 import Select from '@/components/ui/Select'
+import SkeletonCard from '@/components/ui/SkeletonCard'
 import { cn } from '@/lib/cn'
 
 const sortOptions = [
@@ -162,7 +163,16 @@ function ShopContent() {
 
 export default function Shop() {
   return (
-    <Suspense>
+    <Suspense fallback={
+      <div className="container-page pb-16 pt-8">
+        <PageHeader eyebrow="The collection" title="Shop handmade pieces" description="Browse toys, flowers, accessories, and custom-ready keepsakes." />
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      </div>
+    }>
       <ShopContent />
     </Suspense>
   )

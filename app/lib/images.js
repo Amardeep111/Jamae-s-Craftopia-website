@@ -67,8 +67,13 @@ export async function deleteProductImage(url) {
  * @param {Object} options - Transformation options
  * @returns {string} Optimized image URL
  */
+const urlCache = new Map()
+
 export function getOptimizedImageUrl(url, options = {}) {
-  if (!url) return null
+  const key = url + '|' + JSON.stringify(options)
+  if (urlCache.has(key)) return urlCache.get(key)
+
+  if (!url) { urlCache.set(key, null); return null }
 
   // For local development or mock images, return as-is
   if (url.startsWith('/') || url.includes('localhost')) {
@@ -78,13 +83,16 @@ export function getOptimizedImageUrl(url, options = {}) {
   const { width, height, quality = 85, format = 'webp' } = options
   if (url.includes('res.cloudinary.com/') && url.includes('/image/upload/')) {
     const transforms = [`f_${format === 'webp' ? 'auto' : format}`, `q_${quality}`, width ? `w_${width}` : null, height ? `h_${height}` : null, 'c_limit'].filter(Boolean).join(',')
-    return url.replace('/image/upload/', `/image/upload/${transforms}/`)
+    const result = url.replace('/image/upload/', `/image/upload/${transforms}/`)
+    urlCache.set(key, result)
+    return result
   }
 
   // Other remote image URLs remain usable as-is.
-  if (!url.startsWith('/')) return url
+  if (!url.startsWith('/')) { urlCache.set(key, url); return url }
 
   // Local development image paths are served by Next.js.
+  urlCache.set(key, url)
   return url
 }
 
