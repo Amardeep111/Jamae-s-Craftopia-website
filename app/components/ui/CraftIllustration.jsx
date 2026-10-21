@@ -1,3 +1,5 @@
+import { memo } from 'react'
+
 /**
  * Brand illustrations used until real product photos are added.
  * To use a photo, set `product.image` or pass `src` to ProductImage.
@@ -381,16 +383,16 @@ function Yarn({ colors, view = 1 }) {
 }
 
 const visuals = {
-  teddy: Teddy,
-  bunny: Bunny,
-  flower: Flower,
-  bouquet: Bouquet,
-  keychain: Keychain,
-  bandana: Bandana,
-  gift: Gift,
-  heart: Heart,
-  pins: Pins,
-  yarn: Yarn,
+  teddy: memo(Teddy),
+  bunny: memo(Bunny),
+  flower: memo(Flower),
+  bouquet: memo(Bouquet),
+  keychain: memo(Keychain),
+  bandana: memo(Bandana),
+  gift: memo(Gift),
+  heart: memo(Heart),
+  pins: memo(Pins),
+  yarn: memo(Yarn),
 }
 
 const bgMap = {

@@ -13,6 +13,7 @@ import ProductCard from '@/components/ui/ProductCard'
 import Select from '@/components/ui/dropdown/Select'
 import { indiaStates } from '@/lib/india-states'
 import ProductImageGallery from '@/components/ui/ProductImageGallery'
+import SkeletonCard from '@/components/ui/SkeletonCard'
 import CustomerReviews from '@/components/ui/CustomerReviews'
 import { discountedPrice, useProductPricing } from '@/lib/promotions'
 
@@ -66,7 +67,32 @@ export default function ProductDetails({ params }) {
     else setDeliveryResult({ available: true, message: 'Delivery is available to this location. Final serviceability is checked at checkout.' })
   }
 
-  if (!product && !productResolved) return <div className="container-page py-20 text-center text-muted" role="status">Loading product…</div>
+  if (!product && !productResolved) {
+    return (
+      <div className="container-page pb-20 pt-6">
+        <div className="grid gap-10 lg:grid-cols-2">
+          <div className="relative block aspect-[4/5] overflow-hidden bg-gradient-to-br from-sand/40 to-blush/30 animate-pulse rounded-3xl">
+            <div className="absolute inset-0 flex items-center justify-center opacity-40">
+              <svg viewBox="0 0 120 120" aria-hidden="true" className="h-24 w-24"><circle cx="60" cy="60" r="44" fill="none" stroke="#D9CDE8" strokeWidth="3"/><circle cx="60" cy="60" r="30" fill="none" stroke="#E8B4B8" strokeWidth="3"/><circle cx="60" cy="60" r="16" fill="none" stroke="#7A645C" strokeWidth="3"/></svg>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div className="h-3 w-24 rounded-full bg-sand/60 animate-pulse" />
+            <div className="h-10 w-3/4 rounded bg-sand/50 animate-pulse" />
+            <div className="h-4 w-full rounded bg-sand/40 animate-pulse" />
+            <div className="h-4 w-2/3 rounded bg-sand/40 animate-pulse" />
+            <div className="h-4 w-1/2 rounded bg-sand/40 animate-pulse" />
+          </div>
+        </div>
+        <section className="mt-20">
+          <div className="h-8 w-48 rounded bg-sand/50 animate-pulse mb-6" />
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+        </section>
+      </div>
+    )
+  }
 
   if (!product) {
     return (

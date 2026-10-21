@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ShoppingBag } from 'lucide-react'
 import Button from '@/components/ui/Button'
@@ -7,13 +8,33 @@ import { formatPrice } from '@/data/products'
 import { useCartStore } from '@/lib/cart'
 import { useAddressStore } from '@/lib/address'
 import CheckoutProgress from '@/components/checkout/CheckoutProgress'
+import SkeletonCard from '@/components/ui/SkeletonCard'
 
 export default function CheckoutPage() {
-  const items = useCartStore((s) => s.items)
+  const [items, setItems] = useState(useCartStore((s) => s.items))
+  // Loading guard for skeleton while store hydrates / address resolves
+  const [ready, setReady] = useState(false)
+  useEffect(() => { setTimeout(() => setReady(true), 50) }, [])
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
   const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const selectedAddress = useAddressStore((s) => s.getSelectedAddress())
 
+  if (!ready) {
+    return (
+      <div className="container-page pb-20 pt-10">
+        <div className="h-8 w-48 rounded bg-sand/50 animate-pulse mb-6" />
+        <div className="grid gap-10 lg:grid-cols-[1fr_22rem] lg:items-start">
+          <div className="space-y-5">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+          <aside>
+            <div className="paper-card p-6 lg:sticky lg:top-6"><div className="h-8 w-32 rounded bg-sand/50 animate-pulse mb-4" /><div className="h-6 w-full rounded bg-sand/40 animate-pulse" /></div>
+          </aside>
+        </div>
+      </div>
+    )
+  }
   if (items.length === 0) {
     return (
       <div className="container-page pb-20 pt-10 text-center">
