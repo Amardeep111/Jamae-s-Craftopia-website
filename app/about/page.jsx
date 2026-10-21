@@ -45,7 +45,7 @@ export default function About() {
           <SectionHeading
             align="left"
             title="Our story"
-            description="This space is for the real story of Jamae's Craftopia. Until the sisters add their own words, here is what we can say with care:"
+            description="Tina and Papia — two sisters, one practice. A home-grown craft table in Siliguri, where handmade pieces carry stories, names, and care."
           />
           <div className="mt-6 space-y-4 leading-relaxed text-muted">
             <p>
