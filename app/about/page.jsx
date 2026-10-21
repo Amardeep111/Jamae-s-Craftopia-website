@@ -70,23 +70,33 @@ export default function About() {
           description="Two sisters. One practice. Portraits can replace these frames with your own photographs."
         />
         <div className="mt-10 grid gap-6 md:grid-cols-2">
-          {['Sister one', 'Sister two'].map((label, i) => (
-            <ScrollReveal key={label} delay={i * 0.08}>
+          {[
+            {
+              label: 'Tina',
+              visual: 'flower',
+              palette: ['#E8B4B8', '#F7EFE6'],
+              bio: 'Tina is a hardworking and caring creator who puts her heart into everything she does. Her supportive nature, creativity, and dedication shine through in every handmade piece, making each creation truly special and full of love.',
+            },
+            {
+              label: 'Papia',
+              visual: 'heart',
+              palette: ['#D9CDE8', '#C96B7B'],
+              bio: 'Papia is a sweet and thoughtful creator who pours love and creativity into every handmade piece. Her gentle nature and attention to detail make each creation feel personal, meaningful, and truly special.',
+            },
+          ].map((person, i) => (
+            <ScrollReveal key={person.label} delay={i * 0.08}>
               <article className="paper-card overflow-hidden">
                 <div className="aspect-[5/4]">
                   <CraftIllustration
-                    visual={i === 0 ? 'flower' : 'heart'}
-                    palette={i === 0 ? ['#E8B4B8', '#F7EFE6'] : ['#D9CDE8', '#C96B7B']}
+                    visual={person.visual}
+                    palette={person.palette}
                     className="h-full"
                   />
                 </div>
                 <div className="p-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-bloom">Maker</p>
-                  <h3 className="mt-1 font-display text-3xl text-plum">{label}</h3>
-                  <p className="mt-2 text-muted">
-                    Add a short bio, a favourite stitch, or a photo here. Until then, this is a warm placeholder
-                    for the person behind the hook.
-                  </p>
+                  <h3 className="mt-1 font-display text-3xl text-plum">{person.label}</h3>
+                  <p className="mt-2 text-muted">{person.bio}</p>
                 </div>
               </article>
             </ScrollReveal>

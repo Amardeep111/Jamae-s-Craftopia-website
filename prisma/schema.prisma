@@ -57,6 +57,12 @@ model Product {
   unavailablePinCodes String[] @default([])
   allowedPaymentMethods String[] @default(["upi"])
   createdAt      DateTime @default(now())
+
+  @@index([categoryId])
+  @@index([featured])
+  @@index([published])
+  @@index([categoryId, featured, published])
+  @@index([name, short])
   updatedAt      DateTime @updatedAt
   orderItems     OrderItem[]
   cartItems      CartItem[]
