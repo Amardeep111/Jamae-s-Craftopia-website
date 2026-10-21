@@ -57,8 +57,7 @@ export default function About() {
               pieces, and gifts that carry a name. Nothing here is meant to feel factory-made.
             </p>
             <p className="rounded-2xl bg-ivory px-4 py-3 text-sm italic text-plum">
-              Personal names, photos, and longer memories can be added here whenever you are ready — this page is
-              designed to hold them.
+              Jamae's Craftopia is a handmade crochet and craft practice run by two sisters — creating soft things meant to be gifted, kept, and smiled at. Tina brings a hardworking and caring spirit; Papia brings gentle thoughtfulness and attention to detail. Together they make each piece feel personal, meaningful, and truly special.
             </p>
           </div>
         </ScrollReveal>
