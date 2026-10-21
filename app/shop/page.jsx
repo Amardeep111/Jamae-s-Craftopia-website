@@ -25,6 +25,7 @@ function ShopContent() {
   const [catalog, setCatalog] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -36,8 +37,9 @@ function ShopContent() {
         if (!active) return
         if (categoriesResult?.success && Array.isArray(categoriesResult.data)) setCategories(categoriesResult.data)
         if (productsResult?.success && Array.isArray(productsResult.data)) setCatalog(productsResult.data)
+        if (!categoriesResult?.success || !productsResult?.success) setError('Unable to load shelf. Try refreshing.')
       })
-      .catch(() => {})
+      .catch(() => { if (active) setError('Unable to load shelf.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [])
@@ -130,7 +132,17 @@ function ShopContent() {
           ))}
         </div>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+        ) : error ? (
+          <div className="mt-12 text-center">
+            <h2 className="font-display text-2xl text-plum">Shelf is loading</h2>
+            <p className="mt-2 text-muted">{error}</p>
+            <button onClick={() => window.location.reload()} className="mt-4 rounded-full bg-plum px-6 py-2 text-sm font-semibold text-cream">Refresh</button>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="mt-12">
             <EmptyState
               title="Nothing matches just yet"
