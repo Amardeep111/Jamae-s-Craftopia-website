@@ -46,7 +46,7 @@ export default async function Footer() {
           <ul className="mt-4 space-y-2 text-sm text-muted">
             {quickLinks.map((link) => (
               <li key={link.to}>
-                <Link href={link.to} className="transition hover:text-plum">
+                <Link href={link.to} prefetch={true} className="transition hover:text-plum">
                   {link.label}
                 </Link>
               </li>

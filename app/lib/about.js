@@ -59,11 +59,13 @@ export async function getAboutContent() {
 
   try {
     if (prisma?.storeSetting) {
-      await ensureDbColumns()
-      const row = await prisma.storeSetting.findUnique({
-        where: { id: 'main' },
-        select: { aboutContent: true },
-      }).catch(() => null)
+      const row = await Promise.race([
+        prisma.storeSetting.findUnique({
+          where: { id: 'main' },
+          select: { aboutContent: true },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 500)),
+      ]).catch(() => null)
       if (row?.aboutContent && typeof row.aboutContent === 'object') {
         inMemoryAboutContent = mergeAboutContent(row.aboutContent)
         return inMemoryAboutContent

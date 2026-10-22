@@ -84,11 +84,13 @@ export async function getSiteContent() {
 
   try {
     if (prisma?.storeSetting) {
-      await ensureDbColumns()
-      const setting = await prisma.storeSetting.findUnique({
-        where: { id: 'main' },
-        select: { siteContent: true, merchantName: true, whatsappNumber: true },
-      }).catch(() => null)
+      const setting = await Promise.race([
+        prisma.storeSetting.findUnique({
+          where: { id: 'main' },
+          select: { siteContent: true, merchantName: true, whatsappNumber: true },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 500)),
+      ]).catch(() => null)
 
       if (setting?.siteContent && typeof setting.siteContent === 'object') {
         const merged = mergeSiteContent(setting.siteContent)

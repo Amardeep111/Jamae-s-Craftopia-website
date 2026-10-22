@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { getAdminSession } from '@/lib/auth/admin'
 import { getAboutContent, saveAboutContent } from '@/lib/about'
 
@@ -30,6 +31,9 @@ export async function PATCH(request) {
     }
 
     const saved = await saveAboutContent(body)
+    try {
+      revalidatePath('/about')
+    } catch {}
     return NextResponse.json({ success: true, data: saved.data, message: 'About page content updated successfully.' })
   } catch (error) {
     console.error('Failed to save admin about content:', error)

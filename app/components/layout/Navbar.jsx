@@ -84,6 +84,7 @@ export default function Navbar() {
             <li key={link.to}>
               <Link
                 href={link.to}
+                prefetch={true}
                 className={cn(
                   'rounded-full px-4 py-2 text-sm font-semibold transition',
                   isActive(link.to) ? 'bg-blush/60 text-plum shadow-soft' : 'text-muted hover:bg-ivory/80 hover:text-plum',
@@ -145,6 +146,7 @@ export default function Navbar() {
                 <Link
                   key={link.to}
                   href={link.to}
+                  prefetch={true}
                   onClick={() => setOpen(false)}
                   className={cn(
                     'rounded-2xl px-4 py-3 text-lg font-semibold',
