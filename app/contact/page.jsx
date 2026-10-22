@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { CheckCircle2, MapPin, MessageCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, MapPin, MessageCircle, Phone, Mail } from 'lucide-react'
 import { FacebookIcon, InstagramIcon } from '@/components/ui/SocialIcons'
 import PageHeader from '@/components/layout/PageHeader'
 import Button from '@/components/ui/Button'
@@ -10,11 +10,31 @@ import { site } from '@/data/site'
 const initial = { name: '', email: '', message: '' }
 
 export default function Contact() {
+  const [siteInfo, setSiteInfo] = useState(() => site)
   const [form, setForm] = useState(initial)
   const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/site', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((res) => {
+        if (active && res.success && res.data) {
+          setSiteInfo(res.data)
+        }
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  const whatsappLink = siteInfo.whatsapp?.startsWith('http')
+    ? siteInfo.whatsapp
+    : siteInfo.whatsapp?.replace(/\D/g, '')
+      ? `https://wa.me/${siteInfo.whatsapp.replace(/\D/g, '')}`
+      : 'https://wa.me/'
 
   const setField = (key, value) => {
     setForm((f) => ({ ...f, [key]: value }))
@@ -111,40 +131,65 @@ export default function Contact() {
           </div>
 
           <aside className="space-y-4 lg:col-span-2">
-            <div className="paper-card p-6">
-              <MapPin className="h-5 w-5 text-bloom" />
-              <h2 className="mt-3 font-display text-2xl text-plum">Visit in spirit</h2>
-              <p className="mt-2 text-muted">{site.location}</p>
-              <p className="mt-2 text-sm text-muted">{site.email}</p>
-              <p className="text-sm text-muted">{site.phone}</p>
-            </div>
-            <a href={site.social.instagram} className="paper-card flex items-center gap-4 p-6 transition hover:-translate-y-0.5 hover:shadow-lift">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blush text-plum">
-                <InstagramIcon className="h-6 w-6" />
-              </span>
-              <span>
-                <span className="block font-display text-xl text-plum">Instagram</span>
-                <span className="text-sm text-muted">Follow the craft table</span>
-              </span>
-            </a>
-            <a href={site.social.facebook} className="paper-card flex items-center gap-4 p-6 transition hover:-translate-y-0.5 hover:shadow-lift">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-lavender/70 text-plum">
-                <FacebookIcon className="h-6 w-6" />
-              </span>
-              <span>
-                <span className="block font-display text-xl text-plum">Facebook</span>
-                <span className="text-sm text-muted">Say hello there too</span>
-              </span>
-            </a>
-            <a href={site.whatsapp} className="paper-card flex items-center gap-4 p-6 transition hover:-translate-y-0.5 hover:shadow-lift">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sage/70 text-plum">
-                <MessageCircle />
-              </span>
-              <span>
-                <span className="block font-display text-xl text-plum">WhatsApp</span>
-                <span className="text-sm text-muted">A quick, personal chat</span>
-              </span>
-            </a>
+            {((siteInfo.visibility?.location !== false && siteInfo.location) ||
+              (siteInfo.visibility?.email !== false && siteInfo.email) ||
+              (siteInfo.visibility?.phone !== false && siteInfo.phone)) && (
+              <div className="paper-card p-6">
+                <MapPin className="h-5 w-5 text-bloom" />
+                <h2 className="mt-3 font-display text-2xl text-plum">Find us</h2>
+                {siteInfo.visibility?.location !== false && siteInfo.location && (
+                  <p className="mt-2 text-muted">{siteInfo.location}</p>
+                )}
+                {siteInfo.visibility?.email !== false && siteInfo.email && (
+                  <p className="mt-2 text-sm text-muted">
+                    <a href={`mailto:${siteInfo.email}`} className="hover:text-plum transition">
+                      {siteInfo.email}
+                    </a>
+                  </p>
+                )}
+                {siteInfo.visibility?.phone !== false && siteInfo.phone && (
+                  <p className="mt-1 flex items-center gap-2 text-sm text-muted">
+                    <Phone className="h-3.5 w-3.5 text-bloom shrink-0" />
+                    <a href={`tel:${siteInfo.phone.replace(/[^0-9+]/g, '')}`} className="hover:text-plum transition">
+                      {siteInfo.phone}
+                    </a>
+                  </p>
+                )}
+              </div>
+            )}
+            {siteInfo.visibility?.instagram !== false && siteInfo.social?.instagram?.trim() && (
+              <a href={siteInfo.social.instagram} target="_blank" rel="noopener noreferrer" className="paper-card flex items-center gap-4 p-6 transition hover:-translate-y-0.5 hover:shadow-lift">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blush text-plum">
+                  <InstagramIcon className="h-6 w-6" />
+                </span>
+                <span>
+                  <span className="block font-display text-xl text-plum">Instagram</span>
+                  <span className="text-sm text-muted">Follow the craft table</span>
+                </span>
+              </a>
+            )}
+            {siteInfo.visibility?.facebook !== false && siteInfo.social?.facebook?.trim() && (
+              <a href={siteInfo.social.facebook} target="_blank" rel="noopener noreferrer" className="paper-card flex items-center gap-4 p-6 transition hover:-translate-y-0.5 hover:shadow-lift">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-lavender/70 text-plum">
+                  <FacebookIcon className="h-6 w-6" />
+                </span>
+                <span>
+                  <span className="block font-display text-xl text-plum">Facebook</span>
+                  <span className="text-sm text-muted">Say hello there too</span>
+                </span>
+              </a>
+            )}
+            {siteInfo.visibility?.whatsapp !== false && siteInfo.whatsapp?.trim() && (
+              <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="paper-card flex items-center gap-4 p-6 transition hover:-translate-y-0.5 hover:shadow-lift">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sage/70 text-plum">
+                  <MessageCircle />
+                </span>
+                <span>
+                  <span className="block font-display text-xl text-plum">WhatsApp</span>
+                  <span className="text-sm text-muted">A quick, personal chat</span>
+                </span>
+              </a>
+            )}
           </aside>
         </div>
       </>

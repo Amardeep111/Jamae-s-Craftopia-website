@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ChevronLeft, Minus, Plus, Flower2 } from 'lucide-react'
 import { useCartStore } from '@/lib/cart'
 import { categories } from '@/data/categories'
-import { formatPrice, getProductById, getRelatedProducts } from '@/data/products'
+import { formatPrice } from '@/data/products'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
@@ -20,9 +20,10 @@ import { useInView } from '@/hooks/useInView'
 
 export default function ProductDetails({ params }) {
   const { productId } = use(params)
-  const [product, setProduct] = useState(() => getProductById(productId) || null)
+  const [product, setProduct] = useState(null)
   const [productResolved, setProductResolved] = useState(false)
   const [relatedProducts, setRelatedProducts] = useState([])
+  const [relatedLoading, setRelatedLoading] = useState(true)
   const [relatedRef, relatedInView] = useInView({ rootMargin: '400px' })
   const { discountPercent, gstPercent, codFee, otherCharge } = useProductPricing(productId)
   const salePrice = product ? discountedPrice(product.price, discountPercent) : 0
@@ -49,6 +50,7 @@ export default function ProductDetails({ params }) {
   useEffect(() => {
     if (!relatedInView) return
     let active = true
+    setRelatedLoading(true)
     fetch('/api/products?limit=50', { cache: 'no-store' })
       .then((res) => res.json())
       .then((result) => {
@@ -64,15 +66,13 @@ export default function ProductDetails({ params }) {
         }
       })
       .catch(() => {})
+      .finally(() => {
+        if (active) setRelatedLoading(false)
+      })
     return () => {
       active = false
     }
   }, [relatedInView, productId, product?.id, product?.categoryId, product?.category])
-
-  const related = useMemo(() => {
-    if (relatedProducts.length > 0) return relatedProducts
-    return product ? getRelatedProducts(product) : []
-  }, [relatedProducts, product])
 
   const categoryId = product?.categoryId || (typeof product?.category === 'object' ? product?.category?.id || product?.category?.slug : product?.category)
   const category = categoryId ? categories.find((c) => c.id === categoryId || c.slug === categoryId) : null
@@ -281,16 +281,22 @@ export default function ProductDetails({ params }) {
         </div>
 
         {/* Related Products */}
-        {related.length > 0 ? (
-          <section ref={relatedRef} className="mt-20">
-            <h2 className="heading-display text-3xl">You might also love</h2>
+        <section ref={relatedRef} className="mt-20">
+          <h2 className="heading-display text-3xl">You might also love</h2>
+          {relatedProducts.length > 0 ? (
             <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {related.map((p) => (
+              {relatedProducts.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>
-          </section>
-        ) : null}
+          ) : relatedLoading ? (
+            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : null}
+        </section>
 
         {/* Customization Modal */}
         <Modal open={customOpen} title="A more personal version" onClose={() => setCustomOpen(false)}>
