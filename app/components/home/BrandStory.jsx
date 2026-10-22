@@ -51,7 +51,7 @@ export default async function BrandStory() {
             <li className="rounded-2xl bg-ivory/80 px-4 py-3">Customization is welcome. Tell us the story, we will listen.</li>
             <li className="rounded-2xl bg-ivory/80 px-4 py-3">When you order, you are supporting a small, home-grown business.</li>
           </ul>
-          <Button as={Link} href="/about" variant="secondary" className="mt-6">
+          <Button as={Link} href="/about" prefetch={true} variant="secondary" className="mt-6">
             Read our story
           </Button>
         </ScrollReveal>

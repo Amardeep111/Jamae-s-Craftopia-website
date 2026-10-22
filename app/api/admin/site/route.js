@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { getAdminSession } from '@/lib/auth/admin'
 import { getSiteContent, saveSiteContent } from '@/lib/site'
 import { prisma } from '@/lib/db/client'
@@ -53,6 +54,12 @@ export async function PATCH(request) {
     } catch {
       // Non-critical sync
     }
+
+    try {
+      revalidatePath('/')
+      revalidatePath('/about')
+      revalidatePath('/contact')
+    } catch {}
 
     return NextResponse.json({
       success: true,

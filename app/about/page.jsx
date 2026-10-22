@@ -7,7 +7,7 @@ import ScrollReveal from '@/components/ui/ScrollReveal'
 import SectionHeading from '@/components/ui/SectionHeading'
 import { getAboutContent } from '@/lib/about'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 const VALUE_ICONS = [Heart, Sparkles, Leaf]
 

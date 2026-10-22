@@ -59,7 +59,7 @@ export default function ProductCard({ product, className }) {
       hoverable
       className={cn('group flex h-full flex-col overflow-hidden', className)}
     >
-      <Link href={`/shop/${product.id}`} className="relative block aspect-[4/5] overflow-hidden bg-sand">
+      <Link href={`/shop/${product.id}`} prefetch={true} className="relative block aspect-[4/5] overflow-hidden bg-sand">
         <ProductImage
           src={photo}
           alt={product.name}
@@ -79,7 +79,7 @@ export default function ProductCard({ product, className }) {
           {categoryName}
         </p>
         <h3 className="mt-2 font-display text-2xl text-plum">
-          <Link href={`/shop/${product.id}`} className="transition hover:text-bloom">
+          <Link href={`/shop/${product.id}`} prefetch={true} className="transition hover:text-bloom">
             {product.name}
           </Link>
         </h3>
@@ -88,6 +88,7 @@ export default function ProductCard({ product, className }) {
           <div className="flex flex-wrap items-baseline gap-2"><p className="font-semibold text-plum">{formatPrice(salePrice)}</p>{discountPercent > 0 && <><span className="text-sm text-muted line-through">{formatPrice(product.price)}</span><span className="text-xs font-semibold text-moss">{discountPercent}% off</span></>}</div>
           <Link
             href={`/shop/${product.id}`}
+            prefetch={true}
             className="inline-flex items-center gap-1 text-sm font-semibold text-plum transition hover:text-bloom"
           >
             View details
