@@ -8,11 +8,23 @@ import ProductImage from './ProductImage'
 export default function ProductImageGallery({ product }) {
   const [viewerOpen, setViewerOpen] = useState(false)
   const [selected, setSelected] = useState(0)
-  const photos = useMemo(() => [...new Set([
-    product?.imageUrl,
-    product?.image,
-    ...(Array.isArray(product?.images) ? product.images : []),
-  ].filter((url) => typeof url === 'string' && url.trim()))], [product?.imageUrl, product?.image, product?.images])
+  const photos = useMemo(() => {
+    const list = []
+    if (typeof product?.imageUrl === 'string' && product.imageUrl.trim()) list.push(product.imageUrl.trim())
+    if (typeof product?.image === 'string' && product.image.trim()) list.push(product.image.trim())
+    if (Array.isArray(product?.images)) {
+      list.push(...product.images)
+    } else if (typeof product?.images === 'string') {
+      try {
+        const parsed = JSON.parse(product.images)
+        if (Array.isArray(parsed)) list.push(...parsed)
+        else if (product.images.trim()) list.push(product.images.trim())
+      } catch {
+        if (product.images.trim()) list.push(product.images.trim())
+      }
+    }
+    return [...new Set(list.filter((url) => typeof url === 'string' && url.trim()))]
+  }, [product?.imageUrl, product?.image, product?.images])
   const visual = product?.visual || 'yarn'
   const name = product?.name || 'Product image'
   const imageCount = photos.length || 3

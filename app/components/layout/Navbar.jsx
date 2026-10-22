@@ -9,6 +9,7 @@ import { FlowerBurst } from '../ui/Decor'
 import { useLockBody, useScrolled } from '@/hooks/useScrolled'
 import { cn } from '@/lib/cn'
 import { useCartStore } from '@/lib/cart'
+import { fetchCurrentUser } from '@/lib/auth/client'
 import { useUserStore } from '@/lib/user'
 
 const links = [
@@ -48,14 +49,11 @@ export default function Navbar() {
 
   useEffect(() => {
     let active = true
-    fetch('/api/auth/me', { cache: 'no-store' })
-      .then(async (response) => {
-        const result = await response.json().catch(() => ({}))
-        if (!active) return
-        if (response.ok && result.success) userLogin(result.data)
-        else userLogout()
-      })
-      .catch(() => { if (active) userLogout() })
+    fetchCurrentUser().then((auth) => {
+      if (!active) return
+      if (auth.authenticated && auth.user) userLogin(auth.user)
+      else userLogout()
+    }).catch(() => { if (active) userLogout() })
     return () => { active = false }
   }, [userLogin, userLogout])
 

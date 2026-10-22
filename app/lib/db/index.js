@@ -27,10 +27,37 @@ export const db = {
         category: where.categoryId ? { hidden: false, published: true } : undefined,
       },
       take: filters.limit,
+      skip: filters.skip,
       include: {
         category: true,
       },
       orderBy: filters.featured ? { featured: 'desc' } : { createdAt: 'desc' },
+    })
+  },
+
+  async countProducts(filters = {}) {
+    if (shouldUseMockData()) {
+      const all = await mockDb.findManyProducts({ ...filters, limit: undefined, skip: undefined })
+      return all.length
+    }
+
+    const where = {}
+    if (filters.categoryId) where.categoryId = filters.categoryId
+    if (filters.featured !== undefined) where.featured = filters.featured
+    if (filters.published !== undefined) where.published = filters.published
+    if (filters.search) {
+      where.OR = [
+        { name: { contains: filters.search, mode: 'insensitive' } },
+        { short: { contains: filters.search, mode: 'insensitive' } },
+        { description: { contains: filters.search, mode: 'insensitive' } },
+      ]
+    }
+
+    return prisma.product.count({
+      where: {
+        ...where,
+        category: where.categoryId ? { hidden: false, published: true } : undefined,
+      },
     })
   },
 

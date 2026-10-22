@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getFeaturedProducts } from '@/data/products'
+import { useInView } from '@/hooks/useInView'
 import Button from '../ui/Button'
 import ProductCard from '../ui/ProductCard'
 import ScrollReveal from '../ui/ScrollReveal'
@@ -10,16 +11,21 @@ import SectionHeading from '../ui/SectionHeading'
 
 export default function FeaturedProducts() {
   const [featured, setFeatured] = useState(() => getFeaturedProducts().slice(0, 8))
+  const [containerRef, inView] = useInView({ rootMargin: '350px' })
+
   useEffect(() => {
+    if (!inView) return
     let active = true
     fetch('/api/products?featured=true&limit=8', { cache: 'no-store' }).then((response) => response.json()).then((result) => {
-      if (active && result.success && Array.isArray(result.data)) setFeatured(result.data)
+      if (active && result.success && Array.isArray(result.data) && result.data.length > 0) {
+        setFeatured(result.data)
+      }
     }).catch(() => {})
     return () => { active = false }
-  }, [])
+  }, [inView])
 
   return (
-    <section className="container-page mt-20 sm:mt-28">
+    <section ref={containerRef} className="container-page mt-20 sm:mt-28">
       <SectionHeading
         eyebrow="On the table right now"
         title="Featured creations"

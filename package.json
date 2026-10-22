@@ -13,9 +13,9 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:status": "prisma migrate status",
     "db:studio": "prisma studio",
-    "db:seed": "node prisma/seed.js",
-    "db:seed:catalog": "node prisma/seed-catalog.js",
-    "db:bootstrap-admin": "node prisma/bootstrap-superadmin.js",
+    "db:seed": "node --env-file=.env.local --env-file=.env prisma/seed.js",
+    "db:seed:catalog": "node --env-file=.env.local --env-file=.env prisma/seed-catalog.js",
+    "db:bootstrap-admin": "node --env-file=.env.local --env-file=.env prisma/bootstrap-superadmin.js",
     "email:check": "node scripts/check-email.js"
   },
   "dependencies": {

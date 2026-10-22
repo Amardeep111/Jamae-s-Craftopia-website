@@ -47,7 +47,8 @@ async function main() {
         customization: product.customization,
         visual: product.visual,
         palette: product.palette,
-        images: product.images || [],
+        imageUrl: product.image || product.imageUrl || product.images?.[0] || null,
+        images: product.images || (product.image ? [product.image] : []),
         stock: 100,
         published: true,
       },
@@ -63,7 +64,8 @@ async function main() {
         customization: product.customization,
         visual: product.visual,
         palette: product.palette,
-        images: product.images || [],
+        imageUrl: product.image || product.imageUrl || product.images?.[0] || null,
+        images: product.images || (product.image ? [product.image] : []),
         published: true,
       },
     })
@@ -101,6 +103,19 @@ async function main() {
       role: 'SUPERADMIN',
     },
     update: { role: 'SUPERADMIN', adminActive: true },
+  })
+
+  await prisma.storeSetting.upsert({
+    where: { id: 'main' },
+    create: {
+      id: 'main',
+      merchantName: "Jamae's Craftopia",
+      merchantVpa: 'business@upi',
+      whatsappNumber: '919876543210',
+    },
+    update: {
+      merchantName: "Jamae's Craftopia",
+    },
   })
 
   console.log(`Seeded ${shopCategories.length} categories and ${products.length} products.`)

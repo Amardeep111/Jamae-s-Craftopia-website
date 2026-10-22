@@ -16,11 +16,14 @@ import ProductImageGallery from '@/components/ui/ProductImageGallery'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import CustomerReviews from '@/components/ui/CustomerReviews'
 import { discountedPrice, useProductPricing } from '@/lib/promotions'
+import { useInView } from '@/hooks/useInView'
 
 export default function ProductDetails({ params }) {
   const { productId } = use(params)
   const [product, setProduct] = useState(() => getProductById(productId) || null)
   const [productResolved, setProductResolved] = useState(false)
+  const [relatedProducts, setRelatedProducts] = useState([])
+  const [relatedRef, relatedInView] = useInView({ rootMargin: '400px' })
   const { discountPercent, gstPercent, codFee, otherCharge } = useProductPricing(productId)
   const salePrice = product ? discountedPrice(product.price, discountPercent) : 0
   const cartProduct = product ? { ...product, originalPrice: product.price, discountPercent, gstPercent, codFee, otherCharge, price: salePrice } : product
@@ -43,8 +46,36 @@ export default function ProductDetails({ params }) {
     return () => { active = false }
   }, [productId])
 
-  const related = useMemo(() => (product ? getRelatedProducts(product) : []), [product])
-  const category = product ? categories.find((c) => c.id === product.category) : null
+  useEffect(() => {
+    if (!relatedInView) return
+    let active = true
+    fetch('/api/products?limit=50', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((result) => {
+        if (!active || !result?.success || !Array.isArray(result.data)) return
+        const currentId = product?.id || productId
+        const currentCategory = product?.categoryId || (typeof product?.category === 'object' ? product?.category?.id || product?.category?.slug : product?.category)
+        const others = result.data.filter((p) => p.id !== currentId && p.slug !== currentId)
+        const sameCat = others.filter((p) => (p.categoryId || p.category) === currentCategory)
+        const diffCat = others.filter((p) => (p.categoryId || p.category) !== currentCategory)
+        const combined = [...sameCat, ...diffCat].slice(0, 4)
+        if (combined.length > 0) {
+          setRelatedProducts(combined)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [relatedInView, productId, product?.id, product?.categoryId, product?.category])
+
+  const related = useMemo(() => {
+    if (relatedProducts.length > 0) return relatedProducts
+    return product ? getRelatedProducts(product) : []
+  }, [relatedProducts, product])
+
+  const categoryId = product?.categoryId || (typeof product?.category === 'object' ? product?.category?.id || product?.category?.slug : product?.category)
+  const category = categoryId ? categories.find((c) => c.id === categoryId || c.slug === categoryId) : null
   const outOfStock = product && Number.isFinite(Number(product.stock)) && Number(product.stock) <= 0
   const locationRestricted = product?.availableForSale === false || Boolean(deliveryResult && !deliveryResult.available)
 
@@ -127,8 +158,8 @@ export default function ProductDetails({ params }) {
             Shop
           </Link>
           <span aria-hidden="true">/</span>
-          <Link href={`/shop?category=${product.category}`} className="hover:text-plum">
-            {category?.name}
+          <Link href={`/shop?category=${categoryId || ''}`} className="hover:text-plum">
+            {category?.name || product?.categoryName || product?.category?.name || 'Collection'}
           </Link>
           <span aria-hidden="true">/</span>
           <span className="text-plum">{product.name}</span>
@@ -146,7 +177,7 @@ export default function ProductDetails({ params }) {
             <Badge>Handmade</Badge>
             <h1 className="heading-display mt-3 text-4xl sm:text-5xl">{product.name}</h1>
             <p className="mt-2 text-sm font-semibold uppercase tracking-[0.18em] text-bloom">
-              {category?.name}
+              {category?.name || product?.categoryName || product?.category?.name || ''}
             </p>
             <div className="mt-4 flex flex-wrap items-baseline gap-3"><p className="text-2xl font-semibold text-plum">{formatPrice(salePrice)}</p>{discountPercent > 0 && <><span className="text-base text-muted line-through">{formatPrice(product.price)}</span><span className="rounded-full bg-bloom/10 px-3 py-1 text-sm font-bold text-bloom">{discountPercent}% off</span></>}</div>
             {(gstPercent > 0 || codFee > 0 || otherCharge > 0) && <p className="mt-2 text-xs text-muted">{[gstPercent > 0 ? `GST ${gstPercent}%` : null, codFee > 0 ? `COD fee ${formatPrice(codFee)} per item` : null, otherCharge > 0 ? `Other charge ${formatPrice(otherCharge)} per item` : null].filter(Boolean).join(' · ')}. Calculated at checkout.</p>}
@@ -251,7 +282,7 @@ export default function ProductDetails({ params }) {
 
         {/* Related Products */}
         {related.length > 0 ? (
-          <section className="mt-20">
+          <section ref={relatedRef} className="mt-20">
             <h2 className="heading-display text-3xl">You might also love</h2>
             <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {related.map((p) => (

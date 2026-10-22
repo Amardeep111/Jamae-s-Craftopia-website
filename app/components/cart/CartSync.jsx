@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { useCartStore } from '@/lib/cart'
 import { useUserStore } from '@/lib/user'
+import { fetchCurrentUser } from '@/lib/auth/client'
 
 function mergeCartItems(savedItems, guestItems) {
   const merged = new Map(savedItems.map((item) => [item.id, { ...item }]))
@@ -21,9 +22,9 @@ export default function CartSync() {
 
   useEffect(() => {
     let alive = true
-    fetch('/api/auth/me', { cache: 'no-store' }).then(async (response) => {
+    fetchCurrentUser().then((auth) => {
       if (!alive) return
-      if (!response.ok) {
+      if (!auth.authenticated || !auth.user) {
         if (useUserStore.getState().userId) {
           useUserStore.getState().logout()
           useCartStore.getState().replaceItems([])
@@ -31,8 +32,9 @@ export default function CartSync() {
         }
         return
       }
-      const result = await response.json()
-      if (result.success && result.data?.userId) useUserStore.getState().login({ ...result.data, userId: result.data.userId })
+      if (auth.user?.userId) {
+        useUserStore.getState().login({ ...auth.user, userId: auth.user.userId })
+      }
     }).catch(() => {})
     return () => { alive = false }
   }, [])

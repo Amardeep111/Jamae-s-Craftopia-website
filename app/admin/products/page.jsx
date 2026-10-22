@@ -1,4 +1,5 @@
 'use client'
+import ProductImage from '@/components/ui/ProductImage'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAdminAccess } from '../access-context'
@@ -203,8 +204,12 @@ export default function AdminProducts() {
     {loading ? <p role="status">Loading products…</p> : filteredProducts.length === 0 ? <div className="rounded-2xl bg-cream p-8 text-center shadow-soft ring-1 ring-sand"><h2 className="font-display text-xl text-plum">{products.length ? 'No products match' : 'Your catalog is empty'}</h2><p className="mt-2 text-sm text-muted">{products.length ? 'Try a different search.' : 'Add your first product to start building your store.'}</p></div> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{filteredProducts.map((product) => {
       const currentStatus = status(product)
       const restrictedLocations = [...(product.unavailableStates || []), ...(product.unavailablePinCodes || [])]
-      return <article key={product.id} className="min-w-0 rounded-2xl bg-cream p-4 shadow-soft ring-1 ring-sand sm:p-5">
-        <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="break-words font-display text-xl text-plum">{product.name}</h2><p className="mt-1 break-all text-xs text-muted">{product.slug} · {product.category?.name || 'Uncategorized'}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${currentStatus.style}`}>{currentStatus.label}</span></div>
+      return <article key={product.id} className="min-w-0 overflow-hidden rounded-2xl bg-cream p-4 shadow-soft ring-1 ring-sand sm:p-5">
+        <div className="relative block aspect-[4/5] overflow-hidden rounded-2xl bg-sand">
+          <ProductImage src={product.imageUrl || product.images?.[0]} alt={product.name} visual={product.visual} palette={product.palette} className="h-full w-full" />
+          <span className="absolute left-3 top-3 rounded-full bg-cream/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-plum">Handmade</span>
+        </div>
+        <div className="flex items-start justify-between gap-3 pt-4"><div className="min-w-0"><h2 className="break-words font-display text-xl text-plum">{product.name}</h2><p className="mt-1 break-all text-xs text-muted">{product.slug} · {product.category?.name || 'Uncategorized'}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${currentStatus.style}`}>{currentStatus.label}</span></div>
         <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 border-y border-sand py-3 text-sm"><span className="text-muted">Price</span><strong>{money(product.price)}</strong><span className="text-muted">Discount</span><strong>{product.discountPercent || 0}%</strong><span className="text-muted">GST</span><strong>{product.gstPercent || 0}%</strong><span className="text-muted">COD + other fees</span><strong>{money((product.codFee || 0) + (product.otherCharge || 0))}</strong><span className="text-muted">Inventory</span><strong>{product.stock} units</strong><span className="text-muted">Listing</span><strong>{product.published ? 'Published' : 'Hidden'}</strong><span className="text-muted">Purchasable</span><strong>{product.availableForSale === false ? 'Paused' : 'Yes'}</strong><span className="text-muted">Payment</span><strong>{(product.allowedPaymentMethods || ['upi']).map((method) => method.toUpperCase()).join(' + ')}</strong><span className="text-muted">Featured</span><strong>{product.featured ? 'Yes' : 'No'}</strong></div>
         <p className="mt-3 min-h-10 text-xs leading-5 text-muted">{restrictedLocations.length ? `Delivery blocked in: ${restrictedLocations.join(', ')}` : 'Delivery available across all locations.'}</p>
         {canManage && <button onClick={() => { setEditorProduct(product); setEditorOpen(true); setError('') }} className="mt-3 min-h-11 w-full rounded-xl border border-plum/30 bg-white px-4 font-semibold text-plum hover:bg-blush/30">Edit product settings</button>}

@@ -54,6 +54,10 @@ export const mockDb = {
       )
     }
 
+    if (filters.skip) {
+      results = results.slice(filters.skip)
+    }
+
     if (filters.limit) {
       results = results.slice(0, filters.limit)
     }

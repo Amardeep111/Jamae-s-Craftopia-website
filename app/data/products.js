@@ -1,7 +1,6 @@
 /**
- * Sample catalog for Jamae's Craftopia.
- * Replace `image` paths with real product photographs when ready.
- * Until then, ProductImage uses the `visual` illustration as a brand-safe placeholder.
+ * Catalog for Jamae's Craftopia.
+ * Uses real product photographs with visual CraftIllustration fallback.
  */
 export const products = [
   {
@@ -18,7 +17,11 @@ export const products = [
     customization: 'Ribbon colour, size, and a tiny heart on the paw can be customized.',
     visual: 'teddy',
     palette: ['#E8C9A8', '#F3D5D0', '#7A645C'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1559563458-527698bf5295?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1559563458-527698bf5295?w=800&q=80',
+      'https://images.unsplash.com/photo-1605721911519-3dfeb3be25e7?w=800&q=80',
+    ],
   },
   {
     id: 'blossom-bunny',
@@ -34,7 +37,11 @@ export const products = [
     customization: 'Flower colours, ear length, and an optional name tag.',
     visual: 'bunny',
     palette: ['#F7EFE6', '#E8B4B8', '#D9CDE8'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1611601322175-ef8ec8c85f01?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1611601322175-ef8ec8c85f01?w=800&q=80',
+      'https://images.unsplash.com/photo-1581595219315-a187dd40c322?w=800&q=80',
+    ],
   },
   {
     id: 'sunset-bouquet',
@@ -50,7 +57,11 @@ export const products = [
     customization: 'Colour story, bouquet size, and wrapping.',
     visual: 'bouquet',
     palette: ['#F3C9B8', '#E8B4B8', '#F7EFE6'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800&q=80',
+      'https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=800&q=80',
+    ],
   },
   {
     id: 'lavender-rose',
@@ -66,7 +77,11 @@ export const products = [
     customization: 'Any colour you dream of — send a swatch or a feeling.',
     visual: 'flower',
     palette: ['#D9CDE8', '#B89BC9', '#F7EFE6'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&q=80',
+      'https://images.unsplash.com/photo-1508615039623-a25605d2b022?w=800&q=80',
+    ],
   },
   {
     id: 'initial-keychain',
@@ -82,7 +97,11 @@ export const products = [
     customization: 'Letter, colour, and a mini flower or heart accent.',
     visual: 'keychain',
     palette: ['#E8B4B8', '#C5D1C0', '#F3C9B8'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1611689342806-0863700ce1e4?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1611689342806-0863700ce1e4?w=800&q=80',
+      'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800&q=80',
+    ],
   },
   {
     id: 'daisy-bandana',
@@ -98,7 +117,11 @@ export const products = [
     customization: 'Flower colours and band width.',
     visual: 'bandana',
     palette: ['#FBF6F0', '#E8B4B8', '#C5D1C0'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=800&q=80',
+      'https://images.unsplash.com/photo-1590439471364-192aa70c0b53?w=800&q=80',
+    ],
   },
   {
     id: 'juda-pin-set',
@@ -114,7 +137,11 @@ export const products = [
     customization: 'Colour mix and number of pins.',
     visual: 'pins',
     palette: ['#F3C9B8', '#D9CDE8', '#E8B4B8'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1535295972055-1c762f4483e5?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1535295972055-1c762f4483e5?w=800&q=80',
+      'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&q=80',
+    ],
   },
   {
     id: 'name-gift-box',
@@ -130,7 +157,11 @@ export const products = [
     customization: 'Name, palette, occasion, and gift message.',
     visual: 'gift',
     palette: ['#F3D5D0', '#D9CDE8', '#EADFD3'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&q=80',
+      'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&q=80',
+    ],
   },
   {
     id: 'heart-keychain',
@@ -146,7 +177,11 @@ export const products = [
     customization: 'Colour and optional embroidered initials.',
     visual: 'heart',
     palette: ['#E8B4B8', '#C96B7B', '#F7EFE6'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=800&q=80',
+      'https://images.unsplash.com/photo-1611689342806-0863700ce1e4?w=800&q=80',
+    ],
   },
   {
     id: 'cloud-teddy',
@@ -162,7 +197,11 @@ export const products = [
     customization: 'Bow colour and size.',
     visual: 'teddy',
     palette: ['#F7EFE6', '#E8B4B8', '#C5D1C0'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1558877385-81a1c7e67d72?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1558877385-81a1c7e67d72?w=800&q=80',
+      'https://images.unsplash.com/photo-1559563458-527698bf5295?w=800&q=80',
+    ],
   },
   {
     id: 'peach-peony',
@@ -178,7 +217,11 @@ export const products = [
     customization: 'Number of blooms and wrapping style.',
     visual: 'bouquet',
     palette: ['#F3C9B8', '#F3D5D0', '#FBF6F0'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=800&q=80',
+      'https://images.unsplash.com/photo-1487530811176-3780de880c2d?w=800&q=80',
+    ],
   },
   {
     id: 'custom-crochet-outfit',
@@ -194,7 +237,10 @@ export const products = [
     customization: 'Size, body measurements, colour story, silhouette (top, cardigan, dress), and sleeve or hem length.',
     visual: 'yarn',
     palette: ['#E8B4B8', '#F7EFE6', '#D9CDE8'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1611605698335-8b1569810432?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1611605698335-8b1569810432?w=800&q=80',
+    ],
   },
   {
     id: 'sage-scrunchie',
@@ -210,7 +256,11 @@ export const products = [
     customization: 'Base colour and flower type.',
     visual: 'bandana',
     palette: ['#C5D1C0', '#F7EFE6', '#E8B4B8'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1576426863848-c21f53c60b19?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1576426863848-c21f53c60b19?w=800&q=80',
+      'https://images.unsplash.com/photo-1590439471364-192aa70c0b53?w=800&q=80',
+    ],
   },
   {
     id: 'letter-garland',
@@ -226,7 +276,11 @@ export const products = [
     customization: 'Word, colours, and spacing.',
     visual: 'gift',
     palette: ['#D9CDE8', '#F3C9B8', '#E8B4B8'],
-    images: undefined,
+    image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&q=80',
+      'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800&q=80',
+    ],
   },
 ]
 
@@ -244,9 +298,12 @@ export function getFeaturedProducts() {
 }
 
 export function getRelatedProducts(product, limit = 4) {
+  if (!product) return []
+  const cat = product.categoryId || (typeof product.category === 'object' ? product.category?.id || product.category?.slug : product.category)
+  const prodId = product.id || product.slug
   return products
-    .filter((p) => p.id !== product.id && p.category === product.category)
-    .concat(products.filter((p) => p.id !== product.id && p.category !== product.category))
+    .filter((p) => p.id !== prodId && p.category === cat)
+    .concat(products.filter((p) => p.id !== prodId && p.category !== cat))
     .slice(0, limit)
 }
 
