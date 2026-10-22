@@ -6,22 +6,7 @@ import { prisma } from '@/lib/db/client'
 
 const SITE_FILE = path.join(process.cwd(), 'app', 'data', 'site-content.json')
 
-let inMemorySiteContent = null
-let dbColumnsEnsured = false
-
-async function ensureDbColumns() {
-  if (dbColumnsEnsured || !prisma) return
-  try {
-    await prisma.$executeRawUnsafe(`
-      ALTER TABLE "StoreSetting" 
-      ADD COLUMN IF NOT EXISTS "aboutContent" JSONB,
-      ADD COLUMN IF NOT EXISTS "siteContent" JSONB;
-    `)
-    dbColumnsEnsured = true
-  } catch (err) {
-    // Non-critical if table doesn't exist yet or connection fails
-  }
-}
+let inMemorySiteContent = defaultSite
 
 function readDiskOrTmp(targetFile, filename) {
   try {
@@ -80,20 +65,32 @@ export function mergeSiteContent(parsed) {
 }
 
 export async function getSiteContent() {
-  if (inMemorySiteContent) return inMemorySiteContent
-
   try {
     if (prisma?.storeSetting) {
-      const setting = await Promise.race([
-        prisma.storeSetting.findUnique({
-          where: { id: 'main' },
+      const queryPromise = prisma.storeSetting.findUnique({
+        where: { id: 'main' },
+        select: { siteContent: true, merchantName: true, whatsappNumber: true },
+      }).then(async (row) => {
+        if (row?.siteContent) return row
+        return prisma.storeSetting.findFirst({
           select: { siteContent: true, merchantName: true, whatsappNumber: true },
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 500)),
+        })
+      })
+
+      const setting = await Promise.race([
+        queryPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500)),
       ]).catch(() => null)
 
-      if (setting?.siteContent && typeof setting.siteContent === 'object') {
-        const merged = mergeSiteContent(setting.siteContent)
+      let rawContent = setting?.siteContent
+      if (typeof rawContent === 'string') {
+        try {
+          rawContent = JSON.parse(rawContent)
+        } catch {}
+      }
+
+      if (rawContent && typeof rawContent === 'object') {
+        const merged = mergeSiteContent(rawContent)
         if (setting.merchantName && !merged.name) merged.name = setting.merchantName
         inMemorySiteContent = merged
         return inMemorySiteContent
@@ -101,6 +98,10 @@ export async function getSiteContent() {
     }
   } catch (err) {
     console.warn('Failed to load site content from database:', err.message)
+  }
+
+  if (inMemorySiteContent && inMemorySiteContent !== defaultSite) {
+    return inMemorySiteContent
   }
 
   const disk = readDiskOrTmp(SITE_FILE, 'site-content.json')
@@ -125,7 +126,7 @@ export function getSiteContentSync() {
 
 export async function saveSiteContent(content) {
   try {
-    const current = await getSiteContent()
+    const current = inMemorySiteContent || defaultSite
     const merged = mergeSiteContent({
       ...current,
       ...content,
@@ -164,21 +165,23 @@ export async function saveSiteContent(content) {
 
     inMemorySiteContent = merged
 
-    // 1. Persist to database if prisma is available
+    // 1. Persist to database if prisma is available (with 5s safety timeout)
     try {
       if (prisma?.storeSetting) {
-        await ensureDbColumns()
         const updateData = { siteContent: merged }
         if (merged.name) updateData.merchantName = merged.name
         if (merged.whatsapp) {
           const digits = String(merged.whatsapp).replace(/\D/g, '')
           if (digits) updateData.whatsappNumber = digits
         }
-        await prisma.storeSetting.upsert({
-          where: { id: 'main' },
-          create: { id: 'main', ...updateData },
-          update: updateData,
-        })
+        await Promise.race([
+          prisma.storeSetting.upsert({
+            where: { id: 'main' },
+            create: { id: 'main', ...updateData },
+            update: updateData,
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Database write timeout')), 5000)),
+        ])
       }
     } catch (dbErr) {
       console.warn('Failed to persist site content to database:', dbErr.message)

@@ -33,28 +33,6 @@ export async function PATCH(request) {
 
     const saved = await saveSiteContent(body)
 
-    // Keep storeSetting in sync with WhatsApp and store name if provided
-    try {
-      if (prisma?.storeSetting) {
-        const updateData = {}
-        if (body.name) updateData.merchantName = body.name
-        if (body.whatsapp) {
-          // extract digits from whatsapp link or number
-          const digits = String(body.whatsapp).replace(/\D/g, '')
-          if (digits) updateData.whatsappNumber = digits
-        }
-        if (Object.keys(updateData).length > 0) {
-          await prisma.storeSetting.upsert({
-            where: { id: 'main' },
-            create: { id: 'main', ...updateData },
-            update: updateData,
-          }).catch(() => {})
-        }
-      }
-    } catch {
-      // Non-critical sync
-    }
-
     try {
       revalidatePath('/')
       revalidatePath('/about')
