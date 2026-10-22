@@ -11,7 +11,7 @@ export async function GET(request) {
     if (!session) {
       return NextResponse.json({ success: false, error: 'Unauthorized.' }, { status: 403 })
     }
-    const data = getSiteContent()
+    const data = await getSiteContent()
     return NextResponse.json({ success: true, data })
   } catch (error) {
     console.error('Failed to get admin site settings:', error)
@@ -30,7 +30,7 @@ export async function PATCH(request) {
       return NextResponse.json({ success: false, error: 'Invalid settings payload.' }, { status: 400 })
     }
 
-    const saved = saveSiteContent(body)
+    const saved = await saveSiteContent(body)
 
     // Keep storeSetting in sync with WhatsApp and store name if provided
     try {

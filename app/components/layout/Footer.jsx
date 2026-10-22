@@ -12,8 +12,8 @@ const quickLinks = [
   { to: '/contact', label: 'Contact' },
 ]
 
-export default function Footer() {
-  const site = getSiteContent()
+export default async function Footer() {
+  const site = await getSiteContent()
   const visibility = site.visibility || {}
 
   const showLocation = visibility.location !== false && Boolean(site.location?.trim())

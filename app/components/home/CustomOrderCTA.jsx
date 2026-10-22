@@ -3,8 +3,8 @@ import Button from '../ui/Button'
 import CraftIllustration from '../ui/CraftIllustration'
 import { getSiteContent } from '@/lib/site'
 
-export default function CustomOrderCTA() {
-  const site = getSiteContent()
+export default async function CustomOrderCTA() {
+  const site = await getSiteContent()
 
   return (
     <section className="container-page mt-20 sm:mt-28">

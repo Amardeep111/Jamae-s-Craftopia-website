@@ -275,6 +275,8 @@ model StoreSetting {
   merchantVpa    String?
   merchantName   String   @default("Jamae's Craftopia")
   whatsappNumber String?
+  aboutContent   Json?
+  siteContent    Json?
   updatedAt      DateTime @updatedAt
 }
 

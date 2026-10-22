@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ChevronLeft, Minus, Plus, Flower2 } from 'lucide-react'
 import { useCartStore } from '@/lib/cart'
 import { categories } from '@/data/categories'
-import { formatPrice, getProductById } from '@/data/products'
+import { formatPrice } from '@/data/products'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
@@ -20,7 +20,7 @@ import { useInView } from '@/hooks/useInView'
 
 export default function ProductDetails({ params }) {
   const { productId } = use(params)
-  const [product, setProduct] = useState(() => getProductById(productId) || null)
+  const [product, setProduct] = useState(null)
   const [productResolved, setProductResolved] = useState(false)
   const [relatedProducts, setRelatedProducts] = useState([])
   const [relatedLoading, setRelatedLoading] = useState(true)
@@ -39,12 +39,21 @@ export default function ProductDetails({ params }) {
 
   useEffect(() => {
     let active = true
-    fetch(`/api/products/${encodeURIComponent(productId)}`, { cache: 'no-store' }).then((response) => response.json()).then((result) => {
-      if (!active) return
-      setProduct(result.success ? result.data : null)
-      setProductResolved(true)
-    }).catch(() => { if (active) setProductResolved(true) })
-    return () => { active = false }
+    setProduct(null)
+    setProductResolved(false)
+    fetch(`/api/products/${encodeURIComponent(productId)}`, { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((result) => {
+        if (!active) return
+        setProduct(result.success ? result.data : null)
+        setProductResolved(true)
+      })
+      .catch(() => {
+        if (active) setProductResolved(true)
+      })
+    return () => {
+      active = false
+    }
   }, [productId])
 
   useEffect(() => {

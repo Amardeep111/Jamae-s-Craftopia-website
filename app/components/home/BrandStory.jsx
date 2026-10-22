@@ -5,8 +5,8 @@ import SectionHeading from '../ui/SectionHeading'
 import Button from '../ui/Button'
 import { getSiteContent } from '@/lib/site'
 
-export default function BrandStory() {
-  const site = getSiteContent()
+export default async function BrandStory() {
+  const site = await getSiteContent()
 
   return (
     <section className="container-page mt-20 sm:mt-28">

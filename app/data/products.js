@@ -1,8 +1,9 @@
 /**
  * Catalog for Jamae's Craftopia.
- * Uses real product photographs with visual CraftIllustration fallback.
+ * In production, products are served exclusively from the PostgreSQL database via Prisma.
+ * The static catalog below is preserved for local seeding and testing.
  */
-export const products = [
+export const catalogSeedProducts = [
   {
     id: 'honey-bear',
     name: 'Honey Bear',
@@ -57,9 +58,8 @@ export const products = [
     customization: 'Colour story, bouquet size, and wrapping.',
     visual: 'bouquet',
     palette: ['#F3C9B8', '#E8B4B8', '#F7EFE6'],
-    image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=800&q=80',
     images: [
-      'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800&q=80',
       'https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=800&q=80',
     ],
   },
@@ -284,20 +284,28 @@ export const products = [
   },
 ]
 
+export const products = (typeof process !== 'undefined' && process.env.NODE_ENV === 'production')
+  ? []
+  : catalogSeedProducts
+
 export function getProductById(id) {
+  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') return null
   return products.find((p) => p.id === id)
 }
 
 export function getProductsByCategory(categoryId) {
+  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') return []
   if (!categoryId || categoryId === 'all') return products
   return products.filter((p) => p.category === categoryId)
 }
 
 export function getFeaturedProducts() {
+  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') return []
   return products.filter((p) => p.featured)
 }
 
 export function getRelatedProducts(product, limit = 4) {
+  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') return []
   if (!product) return []
   const cat = product.categoryId || (typeof product.category === 'object' ? product.category?.id || product.category?.slug : product.category)
   const prodId = product.id || product.slug

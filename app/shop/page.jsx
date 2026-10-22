@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import EmptyState from '@/components/ui/EmptyState'
@@ -22,8 +22,10 @@ const sortOptions = [
 ]
 
 function ShopContent() {
+  const router = useRouter()
   const searchParams = useSearchParams()
-  const category = searchParams.get('category') || 'all'
+  const categoryParam = searchParams.get('category') || 'all'
+  const [selectedCategory, setSelectedCategory] = useState(categoryParam)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('featured')
 
@@ -38,6 +40,11 @@ function ShopContent() {
   // Infinite scroll sentinel
   const [sentinelRef, sentinelInView] = useInView({ rootMargin: '450px', once: false })
   const fetchingRef = useRef(false)
+
+  // Keep selectedCategory in sync if searchParams changes from browser back/forward
+  useEffect(() => {
+    setSelectedCategory(categoryParam)
+  }, [categoryParam])
 
   // Background non-blocking reconciliation for categories
   useEffect(() => {
@@ -56,13 +63,15 @@ function ShopContent() {
   // Fetch initial batch whenever category changes (non-blocking)
   useEffect(() => {
     let active = true
+    setLoadingInitial(true)
+    setCatalog([])
     fetchingRef.current = true
     setError(null)
 
     const params = new URLSearchParams()
     params.set('limit', String(PAGE_SIZE))
     params.set('skip', '0')
-    if (category !== 'all') params.set('category', category)
+    if (selectedCategory !== 'all') params.set('category', selectedCategory)
 
     fetch(`/api/products?${params.toString()}`, { cache: 'no-store' })
       .then((r) => r.json())
@@ -84,18 +93,18 @@ function ShopContent() {
       })
 
     return () => { active = false }
-  }, [category])
+  }, [selectedCategory])
 
   // Load more on scroll when approaching bottom
   const loadMore = useCallback(() => {
-    if (fetchingRef.current || !hasMore || loadingMore) return
+    if (fetchingRef.current || !hasMore || loadingMore || loadingInitial) return
     fetchingRef.current = true
     setLoadingMore(true)
 
     const params = new URLSearchParams()
     params.set('limit', String(PAGE_SIZE))
     params.set('skip', String(catalog.length))
-    if (category !== 'all') params.set('category', category)
+    if (selectedCategory !== 'all') params.set('category', selectedCategory)
 
     fetch(`/api/products?${params.toString()}`, { cache: 'no-store' })
       .then((r) => r.json())
@@ -122,7 +131,7 @@ function ShopContent() {
         setLoadingMore(false)
         fetchingRef.current = false
       })
-  }, [hasMore, loadingMore, catalog.length, category])
+  }, [hasMore, loadingMore, loadingInitial, catalog.length, selectedCategory])
 
   useEffect(() => {
     if (sentinelInView && hasMore && !loadingMore && !fetchingRef.current) {
@@ -131,18 +140,20 @@ function ShopContent() {
   }, [sentinelInView, hasMore, loadingMore, loadMore])
 
   const setCategory = (slug) => {
-    const params = new URLSearchParams(searchParams)
+    if (slug === selectedCategory) return
+    setSelectedCategory(slug)
+    setLoadingInitial(true)
+    setCatalog([])
+    const params = new URLSearchParams(searchParams.toString())
     if (slug === 'all') params.delete('category')
     else params.set('category', slug)
-    window.history.pushState(null, '', `?${params.toString()}`)
+    const newQuery = params.toString()
+    router.push(newQuery ? `/shop?${newQuery}` : '/shop', { scroll: false })
   }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    let list = catalog.filter((p) => {
-      if (category === 'all') return true
-      return (p.category?.slug || p.categorySlug || p.categoryId || p.category) === category
-    })
+    let list = catalog
     if (q) {
       list = list.filter(
         (p) =>
@@ -156,7 +167,7 @@ function ShopContent() {
     if (sort === 'price-desc') list = [...list].sort((a, b) => b.price - a.price)
     if (sort === 'featured') list = [...list].sort((a, b) => Number(b.featured) - Number(a.featured))
     return list
-  }, [catalog, category, query, sort])
+  }, [catalog, query, sort])
 
   return (
     <>
@@ -192,11 +203,11 @@ function ShopContent() {
           <button
             type="button"
             role="tab"
-            aria-selected={category === 'all'}
+            aria-selected={selectedCategory === 'all'}
             onClick={() => setCategory('all')}
             className={cn(
               'relative z-10 shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition',
-              category === 'all' ? 'bg-plum text-cream' : 'bg-ivory text-plum ring-1 ring-sand hover:bg-blush/50',
+              selectedCategory === 'all' ? 'bg-plum text-cream' : 'bg-ivory text-plum ring-1 ring-sand hover:bg-blush/50',
             )}
           >
             All
@@ -206,11 +217,11 @@ function ShopContent() {
               key={cat.id}
               type="button"
               role="tab"
-              aria-selected={category === cat.slug}
+              aria-selected={selectedCategory === cat.slug}
               onClick={() => setCategory(cat.slug)}
               className={cn(
                 'relative z-10 shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition',
-                category === cat.slug ? 'bg-plum text-cream' : 'bg-ivory text-plum ring-1 ring-sand hover:bg-blush/50',
+                selectedCategory === cat.slug ? 'bg-plum text-cream' : 'bg-ivory text-plum ring-1 ring-sand hover:bg-blush/50',
               )}
             >
               {cat.name}

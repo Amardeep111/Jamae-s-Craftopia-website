@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { products } from '../app/data/products.js'
+import { products, catalogSeedProducts } from '../app/data/products.js'
 import { shopCategories } from '../app/data/categories.js'
 
 const databaseUrl = process.env.DIRECT_URL || process.env.DATABASE_URL
@@ -8,6 +8,7 @@ if (!databaseUrl) throw new Error('Set DIRECT_URL or DATABASE_URL to the Supabas
 const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
 
 async function main() {
+  const seedProducts = (catalogSeedProducts && catalogSeedProducts.length > 0) ? catalogSeedProducts : products
   for (const [index, category] of shopCategories.entries()) {
     await prisma.category.upsert({
       where: { slug: category.slug },
@@ -28,7 +29,7 @@ async function main() {
     })
   }
 
-  for (const product of products) {
+  for (const product of seedProducts) {
     await prisma.product.upsert({
       where: { slug: product.id },
       create: {

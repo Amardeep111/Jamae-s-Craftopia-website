@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const data = getSiteContent()
+    const data = await getSiteContent()
     return NextResponse.json({ success: true, data })
   } catch (error) {
     console.error('Failed to get site content:', error)
