@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ChevronLeft, Minus, Plus, Flower2 } from 'lucide-react'
 import { useCartStore } from '@/lib/cart'
 import { categories } from '@/data/categories'
-import { formatPrice } from '@/data/products'
+import { formatPrice, getProductById, getRelatedProducts } from '@/data/products'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
@@ -20,10 +20,10 @@ import { useInView } from '@/hooks/useInView'
 
 export default function ProductDetails({ params }) {
   const { productId } = use(params)
-  const [product, setProduct] = useState(null)
+  const [product, setProduct] = useState(() => getProductById(productId) || null)
   const [productResolved, setProductResolved] = useState(false)
   const [relatedProducts, setRelatedProducts] = useState([])
-  const [relatedLoading, setRelatedLoading] = useState(true)
+  const [relatedLoading, setRelatedLoading] = useState(false)
   const [relatedRef, relatedInView] = useInView({ rootMargin: '400px' })
   const { discountPercent, gstPercent, codFee, otherCharge } = useProductPricing(productId)
   const salePrice = product ? discountedPrice(product.price, discountPercent) : 0
@@ -48,18 +48,17 @@ export default function ProductDetails({ params }) {
   }, [productId])
 
   useEffect(() => {
-    if (!relatedInView) return
     let active = true
     setRelatedLoading(true)
     fetch('/api/products?limit=50', { cache: 'no-store' })
       .then((res) => res.json())
       .then((result) => {
         if (!active || !result?.success || !Array.isArray(result.data)) return
-        const currentId = product?.id || productId
+        const currentId = productId
         const currentCategory = product?.categoryId || (typeof product?.category === 'object' ? product?.category?.id || product?.category?.slug : product?.category)
         const others = result.data.filter((p) => p.id !== currentId && p.slug !== currentId)
-        const sameCat = others.filter((p) => (p.categoryId || p.category) === currentCategory)
-        const diffCat = others.filter((p) => (p.categoryId || p.category) !== currentCategory)
+        const sameCat = currentCategory ? others.filter((p) => (p.categoryId || p.category) === currentCategory) : []
+        const diffCat = currentCategory ? others.filter((p) => (p.categoryId || p.category) !== currentCategory) : others
         const combined = [...sameCat, ...diffCat].slice(0, 4)
         if (combined.length > 0) {
           setRelatedProducts(combined)
@@ -67,12 +66,21 @@ export default function ProductDetails({ params }) {
       })
       .catch(() => {})
       .finally(() => {
-        if (active) setRelatedLoading(false)
+        setRelatedLoading(false)
       })
     return () => {
       active = false
     }
-  }, [relatedInView, productId, product?.id, product?.categoryId, product?.category])
+  }, [productId, product?.categoryId, product?.category])
+
+  const related = useMemo(() => {
+    if (relatedProducts.length > 0) return relatedProducts
+    if (product) {
+      const fallback = getRelatedProducts(product)
+      if (fallback?.length > 0) return fallback
+    }
+    return []
+  }, [relatedProducts, product])
 
   const categoryId = product?.categoryId || (typeof product?.category === 'object' ? product?.category?.id || product?.category?.slug : product?.category)
   const category = categoryId ? categories.find((c) => c.id === categoryId || c.slug === categoryId) : null
@@ -102,25 +110,16 @@ export default function ProductDetails({ params }) {
     return (
       <div className="container-page pb-20 pt-6">
         <div className="grid gap-10 lg:grid-cols-2">
-          <div className="relative block aspect-[4/5] overflow-hidden bg-gradient-to-br from-sand/40 to-blush/30 animate-pulse rounded-3xl">
-            <div className="absolute inset-0 flex items-center justify-center opacity-40">
-              <svg viewBox="0 0 120 120" aria-hidden="true" className="h-24 w-24"><circle cx="60" cy="60" r="44" fill="none" stroke="#D9CDE8" strokeWidth="3"/><circle cx="60" cy="60" r="30" fill="none" stroke="#E8B4B8" strokeWidth="3"/><circle cx="60" cy="60" r="16" fill="none" stroke="#7A645C" strokeWidth="3"/></svg>
-            </div>
-          </div>
+          <ProductImageGallery loading={true} />
           <div className="space-y-4">
-            <div className="h-3 w-24 rounded-full bg-sand/60 animate-pulse" />
+            <div className="h-4 w-20 rounded-full bg-sand/60 animate-pulse" />
             <div className="h-10 w-3/4 rounded bg-sand/50 animate-pulse" />
-            <div className="h-4 w-full rounded bg-sand/40 animate-pulse" />
-            <div className="h-4 w-2/3 rounded bg-sand/40 animate-pulse" />
-            <div className="h-4 w-1/2 rounded bg-sand/40 animate-pulse" />
+            <div className="h-4 w-32 rounded bg-sand/40 animate-pulse" />
+            <div className="h-8 w-28 rounded bg-sand/50 animate-pulse mt-4" />
+            <div className="h-16 w-full rounded-2xl bg-sand/30 animate-pulse mt-6" />
+            <div className="h-12 w-48 rounded-full bg-sand/50 animate-pulse mt-6" />
           </div>
         </div>
-        <section className="mt-20">
-          <div className="h-8 w-48 rounded bg-sand/50 animate-pulse mb-6" />
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
-          </div>
-        </section>
       </div>
     )
   }
@@ -281,22 +280,24 @@ export default function ProductDetails({ params }) {
         </div>
 
         {/* Related Products */}
-        <section ref={relatedRef} className="mt-20">
-          <h2 className="heading-display text-3xl">You might also love</h2>
-          {relatedProducts.length > 0 ? (
-            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {relatedProducts.map((p) => (
-                <ProductCard key={p.id} product={p} />
-              ))}
-            </div>
-          ) : relatedLoading ? (
-            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <SkeletonCard key={i} />
-              ))}
-            </div>
-          ) : null}
-        </section>
+        {(related.length > 0 || relatedLoading) && (
+          <section className="mt-20">
+            <h2 className="heading-display text-3xl">You might also love</h2>
+            {related.length > 0 ? (
+              <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {related.map((p) => (
+                  <ProductCard key={p.id} product={p} />
+                ))}
+              </div>
+            ) : (
+              <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Customization Modal */}
         <Modal open={customOpen} title="A more personal version" onClose={() => setCustomOpen(false)}>
