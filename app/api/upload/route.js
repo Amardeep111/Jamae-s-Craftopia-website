@@ -2,18 +2,22 @@ import { NextResponse } from 'next/server'
 import { getAdminSession } from '@/lib/auth/admin'
 import { uploadImageToStorage } from '@/lib/cloudinary'
 
-async function requireProductManager(request) {
-  return getAdminSession(request.cookies.get('jamaes_session')?.value, 'products.manage')
+async function requireManager(request) {
+  const cookie = request.cookies.get('jamaes_session')?.value
+  const session = await getAdminSession(cookie, 'products.manage')
+  if (session) return session
+  return getAdminSession(cookie, 'settings.manage')
 }
 
 // POST - Upload image
 export async function POST(request) {
   try {
-    const session = await requireProductManager(request)
-    if (!session) return NextResponse.json({ success: false, error: 'You do not have permission to upload product images.' }, { status: 403 })
+    const session = await requireManager(request)
+    if (!session) return NextResponse.json({ success: false, error: 'You do not have permission to upload images.' }, { status: 403 })
     const formData = await request.formData()
     const file = formData.get('file')
     const productId = formData.get('productId')
+    const targetFolder = formData.get('folder')
 
     if (!file) {
       return NextResponse.json(
@@ -23,7 +27,11 @@ export async function POST(request) {
     }
 
     // Validate file type
-    const folder = productId ? `jamaes-craftopia/products/${String(productId).replace(/[^a-zA-Z0-9_-]/g, '')}` : 'jamaes-craftopia/products'
+    const folder = targetFolder
+      ? String(targetFolder).replace(/[^a-zA-Z0-9_\-\/]/g, '')
+      : productId
+        ? `jamaes-craftopia/products/${String(productId).replace(/[^a-zA-Z0-9_-]/g, '')}`
+        : 'jamaes-craftopia/storefront'
     const { url, publicId } = await uploadImageToStorage(file, folder)
 
     return NextResponse.json({

@@ -20,6 +20,29 @@ export function getSiteContent() {
           ...defaultSite.visibility,
           ...(parsed.visibility || {}),
         },
+        images: {
+          ...defaultSite.images,
+          ...(parsed.images || {}),
+          hero: {
+            ...(defaultSite.images?.hero || {}),
+            ...(parsed.images?.hero || {}),
+          },
+          brandStory: {
+            ...(defaultSite.images?.brandStory || {}),
+            ...(parsed.images?.brandStory || {}),
+          },
+          customOrderCta: {
+            ...(defaultSite.images?.customOrderCta || {}),
+            ...(parsed.images?.customOrderCta || {}),
+          },
+          customOrdersPage: {
+            ...(defaultSite.images?.customOrdersPage || {}),
+            ...(parsed.images?.customOrdersPage || {}),
+          },
+          craftTable: Array.isArray(parsed.images?.craftTable) && parsed.images.craftTable.length
+            ? parsed.images.craftTable
+            : defaultSite.images?.craftTable || [],
+        },
       }
     }
   } catch (err) {
@@ -41,6 +64,29 @@ export function saveSiteContent(content) {
       visibility: {
         ...current.visibility,
         ...(content.visibility || {}),
+      },
+      images: {
+        ...current.images,
+        ...(content.images || {}),
+        hero: {
+          ...(current.images?.hero || {}),
+          ...(content.images?.hero || {}),
+        },
+        brandStory: {
+          ...(current.images?.brandStory || {}),
+          ...(content.images?.brandStory || {}),
+        },
+        customOrderCta: {
+          ...(current.images?.customOrderCta || {}),
+          ...(content.images?.customOrderCta || {}),
+        },
+        customOrdersPage: {
+          ...(current.images?.customOrdersPage || {}),
+          ...(content.images?.customOrdersPage || {}),
+        },
+        craftTable: Array.isArray(content.images?.craftTable)
+          ? content.images.craftTable
+          : current.images?.craftTable || [],
       },
     }
     fs.writeFileSync(SITE_FILE, JSON.stringify(merged, null, 2), 'utf-8')

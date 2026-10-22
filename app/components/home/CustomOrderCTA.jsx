@@ -1,8 +1,11 @@
 import Link from 'next/link'
 import Button from '../ui/Button'
 import CraftIllustration from '../ui/CraftIllustration'
+import { getSiteContent } from '@/lib/site'
 
 export default function CustomOrderCTA() {
+  const site = getSiteContent()
+
   return (
     <section className="container-page mt-20 sm:mt-28">
       <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-plum via-[#6a4860] to-[#4a342c] px-6 py-12 text-cream sm:px-12 sm:py-16">
@@ -24,7 +27,19 @@ export default function CustomOrderCTA() {
           </div>
           <div className="mx-auto w-full max-w-sm overflow-hidden rounded-[1.75rem] bg-cream/10 ring-1 ring-cream/15">
             <div className="aspect-square">
-              <CraftIllustration visual="yarn" palette={['#E8B4B8', '#F7EFE6']} className="h-full from-petal/40 to-lavender/30" />
+              {site.images?.customOrderCta?.banner ? (
+                <img
+                  src={site.images.customOrderCta.banner}
+                  alt="Custom crochet clothes"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <CraftIllustration
+                  visual="yarn"
+                  palette={['#E8B4B8', '#F7EFE6']}
+                  className="h-full from-petal/40 to-lavender/30"
+                />
+              )}
             </div>
           </div>
         </div>

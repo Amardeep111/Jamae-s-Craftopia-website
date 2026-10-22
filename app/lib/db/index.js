@@ -21,18 +21,26 @@ export const db = {
       ]
     }
 
-    return prisma.product.findMany({
-      where: {
-        ...where,
-        category: where.categoryId ? { hidden: false, published: true } : undefined,
-      },
-      take: filters.limit,
-      skip: filters.skip,
-      include: {
-        category: true,
-      },
-      orderBy: filters.featured ? { featured: 'desc' } : { createdAt: 'desc' },
-    })
+    try {
+      return await prisma.product.findMany({
+        where: {
+          ...where,
+          category: where.categoryId ? { hidden: false, published: true } : undefined,
+        },
+        take: filters.limit,
+        skip: filters.skip,
+        include: {
+          category: true,
+        },
+        orderBy: filters.featured ? { featured: 'desc' } : { createdAt: 'desc' },
+      })
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Prisma query failed, falling back to mockDb:', err.message)
+        return mockDb.findManyProducts(filters)
+      }
+      throw err
+    }
   },
 
   async countProducts(filters = {}) {
@@ -53,12 +61,20 @@ export const db = {
       ]
     }
 
-    return prisma.product.count({
-      where: {
-        ...where,
-        category: where.categoryId ? { hidden: false, published: true } : undefined,
-      },
-    })
+    try {
+      return await prisma.product.count({
+        where: {
+          ...where,
+          category: where.categoryId ? { hidden: false, published: true } : undefined,
+        },
+      })
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        const all = await mockDb.findManyProducts({ ...filters, limit: undefined, skip: undefined })
+        return all.length
+      }
+      throw err
+    }
   },
 
   async getProductById(id) {
@@ -66,10 +82,17 @@ export const db = {
       return mockDb.findProductById(id)
     }
 
-    return prisma.product.findUnique({
-      where: { id },
-      include: { category: true },
-    })
+    try {
+      return await prisma.product.findUnique({
+        where: { id },
+        include: { category: true },
+      })
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        return mockDb.findProductById(id)
+      }
+      throw err
+    }
   },
 
   async getProductBySlug(slug) {
@@ -77,10 +100,17 @@ export const db = {
       return mockDb.findProductById(slug)
     }
 
-    return prisma.product.findUnique({
-      where: { slug },
-      include: { category: true },
-    })
+    try {
+      return await prisma.product.findUnique({
+        where: { slug },
+        include: { category: true },
+      })
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        return mockDb.findProductById(slug)
+      }
+      throw err
+    }
   },
 
   // Categories
@@ -89,10 +119,17 @@ export const db = {
       return mockDb.findManyCategories()
     }
 
-    return prisma.category.findMany({
-      where: { hidden: false, published: true },
-      orderBy: { order: 'asc' },
-    })
+    try {
+      return await prisma.category.findMany({
+        where: { hidden: false, published: true },
+        orderBy: { order: 'asc' },
+      })
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        return mockDb.findManyCategories()
+      }
+      throw err
+    }
   },
 
   async getCategoryById(id) {
