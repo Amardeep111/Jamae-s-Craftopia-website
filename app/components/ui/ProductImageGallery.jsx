@@ -28,6 +28,11 @@ export default function ProductImageGallery({ product, loading = false }) {
   const [selected, setSelected] = useState(0)
   const [loadedPhotos, setLoadedPhotos] = useState({})
 
+  useEffect(() => {
+    setSelected(0)
+    setLoadedPhotos({})
+  }, [product?.id, product?.slug, product?.imageUrl])
+
   const photos = useMemo(() => {
     const list = []
     if (typeof product?.imageUrl === 'string' && product.imageUrl.trim()) list.push(product.imageUrl.trim())

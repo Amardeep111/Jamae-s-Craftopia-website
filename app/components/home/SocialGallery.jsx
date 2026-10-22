@@ -4,8 +4,8 @@ import ScrollReveal from '../ui/ScrollReveal'
 import SectionHeading from '../ui/SectionHeading'
 import { getSiteContent } from '@/lib/site'
 
-export default function SocialGallery() {
-  const site = getSiteContent()
+export default async function SocialGallery() {
+  const site = await getSiteContent()
 
   const configuredGallery = Array.isArray(site.images?.craftTable) && site.images.craftTable.length > 0
     ? site.images.craftTable

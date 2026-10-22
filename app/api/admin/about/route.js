@@ -10,7 +10,7 @@ export async function GET(request) {
     if (!session) {
       return NextResponse.json({ success: false, error: 'Unauthorized.' }, { status: 403 })
     }
-    const data = getAboutContent()
+    const data = await getAboutContent()
     return NextResponse.json({ success: true, data })
   } catch (error) {
     console.error('Failed to get admin about content:', error)
@@ -29,7 +29,7 @@ export async function PATCH(request) {
       return NextResponse.json({ success: false, error: 'Invalid content payload.' }, { status: 400 })
     }
 
-    const saved = saveAboutContent(body)
+    const saved = await saveAboutContent(body)
     return NextResponse.json({ success: true, data: saved.data, message: 'About page content updated successfully.' })
   } catch (error) {
     console.error('Failed to save admin about content:', error)

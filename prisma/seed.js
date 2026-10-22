@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
-import { products } from '../app/data/products.js'
+import { products, catalogSeedProducts } from '../app/data/products.js'
 import { shopCategories } from '../app/data/categories.js'
 
 const prisma = new PrismaClient()
@@ -9,6 +9,8 @@ async function main() {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('The local seed script is disabled in production.')
   }
+
+  const seedProducts = (catalogSeedProducts && catalogSeedProducts.length > 0) ? catalogSeedProducts : products
 
   for (const [index, category] of shopCategories.entries()) {
     await prisma.category.upsert({
@@ -30,7 +32,7 @@ async function main() {
     })
   }
 
-  for (const product of products) {
+  for (const product of seedProducts) {
     await prisma.product.upsert({
       where: { slug: product.id },
       create: {

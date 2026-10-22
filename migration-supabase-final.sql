@@ -389,6 +389,8 @@ CREATE TABLE "StoreSetting" (
   "merchantVpa" TEXT,
   "merchantName" TEXT NOT NULL DEFAULT 'Jamae''s Craftopia',
   "whatsappNumber" TEXT,
+  "aboutContent" JSONB,
+  "siteContent" JSONB,
   "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "StoreSetting_pkey" PRIMARY KEY ("id")
 );

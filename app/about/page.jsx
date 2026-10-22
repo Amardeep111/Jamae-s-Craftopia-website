@@ -11,8 +11,8 @@ export const dynamic = 'force-dynamic'
 
 const VALUE_ICONS = [Heart, Sparkles, Leaf]
 
-export default function About() {
-  const content = getAboutContent()
+export default async function About() {
+  const content = await getAboutContent()
   const { header, story, makersHeading, makers, values, crafting } = content
 
   return (

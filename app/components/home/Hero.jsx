@@ -5,8 +5,8 @@ import CraftIllustration from '../ui/CraftIllustration'
 import { Blob, FlowerBurst } from '../ui/Decor'
 import { getSiteContent } from '@/lib/site'
 
-export default function Hero() {
-  const site = getSiteContent()
+export default async function Hero() {
+  const site = await getSiteContent()
 
   return (
     <section className="relative overflow-hidden pb-16 pt-6 sm:pb-20 sm:pt-10 lg:pt-16">
