@@ -3,8 +3,11 @@ import { Heart } from 'lucide-react'
 import Button from '../ui/Button'
 import CraftIllustration from '../ui/CraftIllustration'
 import { Blob, FlowerBurst } from '../ui/Decor'
+import { getSiteContent } from '@/lib/site'
 
 export default function Hero() {
+  const site = getSiteContent()
+
   return (
     <section className="relative overflow-hidden pb-16 pt-6 sm:pb-20 sm:pt-10 lg:pt-16">
       <Blob className="pointer-events-none absolute -left-24 top-10 h-64 w-64 text-blush/50 animate-float-slow" />
@@ -19,10 +22,10 @@ export default function Hero() {
             Siliguri · Handmade
           </p>
           <h1 className="heading-display mt-5 text-4xl leading-[1.12] sm:text-5xl lg:text-6xl">
-            Handmade with love, created especially for you.
+            {site.tagline || 'Handmade with love, created especially for you.'}
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted">
-            Welcome to Jamae's Craftopia — a cozy little world of crochet teddies, everlasting flowers,
+            Welcome to {site.name || "Jamae's Craftopia"} — a cozy little world of crochet teddies, everlasting flowers,
             and custom gifts, stitched slowly by two sisters.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -39,13 +42,25 @@ export default function Hero() {
           <div className="absolute -inset-6 rounded-[2.5rem] bg-gradient-to-br from-blush/50 via-lavender/30 to-peach/40 blur-2xl" />
           <div className="relative grid grid-cols-2 gap-4">
             <div className="paper-card col-span-2 aspect-[16/10] overflow-hidden sm:aspect-[16/9]">
-              <CraftIllustration visual="teddy" palette={['#E8C9A8', '#F3D5D0', '#4A342C']} className="h-full" />
+              {site.images?.hero?.top ? (
+                <img src={site.images.hero.top} alt="Handmade crochet creations" className="h-full w-full object-cover" />
+              ) : (
+                <CraftIllustration visual="teddy" palette={['#E8C9A8', '#F3D5D0', '#4A342C']} className="h-full" />
+              )}
             </div>
             <div className="paper-card aspect-square overflow-hidden">
-              <CraftIllustration visual="bouquet" palette={['#F3C9B8', '#E8B4B8', '#F7EFE6']} className="h-full" />
+              {site.images?.hero?.bottomLeft ? (
+                <img src={site.images.hero.bottomLeft} alt="Handcrafted bouquet" className="h-full w-full object-cover" />
+              ) : (
+                <CraftIllustration visual="bouquet" palette={['#F3C9B8', '#E8B4B8', '#F7EFE6']} className="h-full" />
+              )}
             </div>
             <div className="paper-card aspect-square overflow-hidden">
-              <CraftIllustration visual="flower" palette={['#D9CDE8', '#B89BC9']} className="h-full" />
+              {site.images?.hero?.bottomRight ? (
+                <img src={site.images.hero.bottomRight} alt="Crochet floral detail" className="h-full w-full object-cover" />
+              ) : (
+                <CraftIllustration visual="flower" palette={['#D9CDE8', '#B89BC9']} className="h-full" />
+              )}
             </div>
           </div>
         </div>

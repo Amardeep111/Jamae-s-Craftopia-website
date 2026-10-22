@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifySession } from '@/lib/auth/session';
-import { Shield, Package, Users, TrendingUp, CheckCircle, Tag, Settings, UserRound, ClipboardList, BookOpen } from 'lucide-react';
+import { Shield, Package, Users, TrendingUp, CheckCircle, Tag, Settings, UserRound, ClipboardList } from 'lucide-react';
 import AdminLogoutButton from './logout-button';
 import { AdminAccessProvider } from './access-context';
 
@@ -36,7 +36,6 @@ export default async function AdminLayout({ children }) {
           {can('users.view') && <AdminNavLink href="/admin/users" icon={<Users className="h-4 w-4" />} label="Customers" />}
           {can('categories.view') && <AdminNavLink href="/admin/categories" icon={<Tag className="h-4 w-4" />} label="Categories" />}
           {can('coupons.view') && <AdminNavLink href="/admin/coupons" icon={<Tag className="h-4 w-4" />} label="Coupons" />}
-          {can('settings.view') && <AdminNavLink href="/admin/about" icon={<BookOpen className="h-4 w-4" />} label="About page" />}
           {can('settings.view') && <AdminNavLink href="/admin/settings" icon={<Settings className="h-4 w-4" />} label="Store & payment" />}
           {isSuperadmin && <AdminNavLink href="/admin/admins" icon={<Shield className="h-4 w-4" />} label="Admin access" />}
           <AdminNavLink href="/admin/account" icon={<UserRound className="h-4 w-4" />} label="My account" />
@@ -49,7 +48,6 @@ export default async function AdminLayout({ children }) {
         {can('products.view') && <AdminNavLink href="/admin/products" icon={<CheckCircle className="h-4 w-4" />} label="Products" />}
         {can('users.view') && <AdminNavLink href="/admin/users" icon={<Users className="h-4 w-4" />} label="Customers" />}
         {can('coupons.view') && <AdminNavLink href="/admin/coupons" icon={<Tag className="h-4 w-4" />} label="Coupons" />}
-        {can('settings.view') && <AdminNavLink href="/admin/about" icon={<BookOpen className="h-4 w-4" />} label="About" />}
         {can('settings.view') && <AdminNavLink href="/admin/settings" icon={<Settings className="h-4 w-4" />} label="Settings" />}
         {isSuperadmin && <AdminNavLink href="/admin/admins" icon={<Shield className="h-4 w-4" />} label="Admin access" />}
         <AdminNavLink href="/admin/account" icon={<UserRound className="h-4 w-4" />} label="My account" />

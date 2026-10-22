@@ -3,22 +3,37 @@ import CraftIllustration from '../ui/CraftIllustration'
 import ScrollReveal from '../ui/ScrollReveal'
 import SectionHeading from '../ui/SectionHeading'
 import Button from '../ui/Button'
+import { getSiteContent } from '@/lib/site'
 
 export default function BrandStory() {
+  const site = getSiteContent()
+
   return (
     <section className="container-page mt-20 sm:mt-28">
       <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
         <ScrollReveal>
           <div className="grid grid-cols-2 gap-4">
             <div className="paper-card aspect-[3/4] overflow-hidden">
-              <CraftIllustration visual="yarn" palette={['#D9CDE8', '#5A3D4A']} className="h-full" />
+              {site.images?.brandStory?.left ? (
+                <img src={site.images.brandStory.left} alt="Making crochet pieces by hand" className="h-full w-full object-cover" />
+              ) : (
+                <CraftIllustration visual="yarn" palette={['#D9CDE8', '#5A3D4A']} className="h-full" />
+              )}
             </div>
             <div className="mt-8 space-y-4">
               <div className="paper-card aspect-square overflow-hidden">
-                <CraftIllustration visual="heart" palette={['#E8B4B8']} className="h-full" />
+                {site.images?.brandStory?.topRight ? (
+                  <img src={site.images.brandStory.topRight} alt="Handmade with heart" className="h-full w-full object-cover" />
+                ) : (
+                  <CraftIllustration visual="heart" palette={['#E8B4B8']} className="h-full" />
+                )}
               </div>
               <div className="paper-card aspect-[4/3] overflow-hidden">
-                <CraftIllustration visual="teddy" palette={['#F7EFE6', '#E8B4B8', '#4A342C']} className="h-full" />
+                {site.images?.brandStory?.bottomRight ? (
+                  <img src={site.images.brandStory.bottomRight} alt="Detailed crochet craft" className="h-full w-full object-cover" />
+                ) : (
+                  <CraftIllustration visual="teddy" palette={['#F7EFE6', '#E8B4B8', '#4A342C']} className="h-full" />
+                )}
               </div>
             </div>
           </div>

@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   MapPin, Phone, Mail, MessageCircle,
-  CreditCard, Store, Check, ExternalLink, Globe, Sparkles
+  CreditCard, Store, Check, ExternalLink, Globe, Sparkles,
+  Upload, ImageIcon, Image as ImageLucide, BookOpen
 } from 'lucide-react'
 import { InstagramIcon, FacebookIcon } from '@/components/ui/SocialIcons'
 import { useAdminAccess } from '../access-context'
+import AboutTab from './AboutTab'
 
 function VisibilityBadge({ isVisible, onToggle, disabled }) {
   return (
@@ -27,11 +29,172 @@ function VisibilityBadge({ isVisible, onToggle, disabled }) {
   )
 }
 
+function ImageField({
+  label,
+  description,
+  value,
+  onChange,
+  disabled = false,
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const fileInputRef = useRef(null)
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError('')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'jamaes-craftopia/storefront')
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to upload photo')
+      }
+      onChange(data.url)
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full rounded-2xl border border-sand/80 bg-white p-3.5 sm:p-4 shadow-sm transition hover:shadow-soft min-w-0 w-full overflow-hidden">
+      {/* Header */}
+      <div className="mb-2 min-w-0">
+        <label className="block text-xs font-bold text-plum uppercase tracking-wider truncate" title={label}>
+          {label}
+        </label>
+        {description && (
+          <p className="mt-0.5 text-[11px] text-muted line-clamp-2" title={description}>
+            {description}
+          </p>
+        )}
+      </div>
+
+      {/* Visual / Image Preview Area */}
+      <div className="relative w-full aspect-[16/10] sm:aspect-video overflow-hidden rounded-xl border border-sand bg-ivory/60 flex items-center justify-center mb-3 group shrink-0">
+        {value ? (
+          <>
+            <img src={value} alt={label} className="h-full w-full object-cover transition group-hover:scale-105 duration-300" />
+            <div className="absolute inset-0 bg-plum/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+              <button
+                type="button"
+                disabled={disabled || uploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-plum shadow-md hover:bg-white"
+              >
+                Change photo
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center text-muted/70 text-xs text-center p-3">
+            <div className="h-8 w-8 rounded-full bg-plum/5 flex items-center justify-center mb-1 text-bloom">
+              <ImageIcon className="h-4 w-4" />
+            </div>
+            <span className="font-medium text-[11px] text-plum/70">Default Brand Art</span>
+            <span className="text-[10px] text-muted mt-0.5">Will display brand SVG</span>
+          </div>
+        )}
+
+        {/* Uploading overlay */}
+        {uploading && (
+          <div className="absolute inset-0 bg-plum/70 backdrop-blur-xs flex items-center justify-center z-10">
+            <div className="flex items-center gap-2 text-cream text-xs font-semibold">
+              <div className="h-4 w-4 border-2 border-cream/30 border-t-cream rounded-full animate-spin" />
+              <span>Uploading…</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons & URL Input */}
+      <div className="mt-auto space-y-2 min-w-0 w-full">
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleFileChange}
+          disabled={disabled || uploading}
+        />
+
+        <div className="flex items-center gap-2 min-w-0 w-full">
+          <button
+            type="button"
+            disabled={disabled || uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl bg-plum/10 hover:bg-plum/20 px-3 py-2 text-xs font-semibold text-plum transition disabled:opacity-50"
+          >
+            <Upload className="h-3.5 w-3.5 text-bloom shrink-0" />
+            <span className="truncate">{uploading ? 'Uploading…' : value ? 'Replace Photo' : 'Upload Photo'}</span>
+          </button>
+
+          {value && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange('')}
+              className="shrink-0 rounded-xl border border-sand bg-white px-2.5 py-2 text-xs font-semibold text-muted hover:text-bloom hover:bg-blush/40 transition"
+              title="Reset to default illustration"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* Direct URL input */}
+        <div className="min-w-0 w-full">
+          <input
+            type="url"
+            readOnly={disabled}
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Or paste direct image URL (https://…)"
+            className="w-full min-w-0 rounded-xl border border-sand/80 bg-sand/20 px-2.5 py-1.5 text-[11px] text-plum placeholder:text-muted/60 read-only:bg-ink/5 focus:border-bloom focus:bg-white focus:outline-none transition"
+          />
+        </div>
+
+        {uploadError && <p className="text-[11px] text-bloom font-medium break-words">{uploadError}</p>}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminSettings() {
   const { can } = useAdminAccess()
   const canManage = can('settings.manage')
 
-  const [activeTab, setActiveTab] = useState('contact') // 'contact' | 'payment'
+  const [activeTab, setActiveTab] = useState('contact') // 'contact' | 'about' | 'images' | 'payment'
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const tab = new URLSearchParams(window.location.search).get('tab')
+      if (['contact', 'about', 'images', 'payment'].includes(tab)) {
+        setActiveTab(tab)
+      }
+    }
+  }, [])
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId)
+    setError('')
+    setNotice('')
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('tab', tabId)
+      window.history.replaceState(null, '', url.toString())
+    }
+  }
 
   // Contact & Social form state
   const [siteForm, setSiteForm] = useState({
@@ -53,6 +216,22 @@ export default function AdminSettings() {
       instagram: true,
       facebook: true,
     },
+    images: {
+      hero: { top: '', bottomLeft: '', bottomRight: '' },
+      brandStory: { left: '', topRight: '', bottomRight: '' },
+      customOrderCta: { banner: '' },
+      craftTable: [
+        { id: 1, image: '', visual: 'yarn', tall: false },
+        { id: 2, image: '', visual: 'teddy', tall: true },
+        { id: 3, image: '', visual: 'flower', tall: false },
+        { id: 4, image: '', visual: 'bouquet', tall: false },
+        { id: 5, image: '', visual: 'tote', tall: true },
+        { id: 6, image: '', visual: 'blanket', tall: false },
+        { id: 7, image: '', visual: 'gift', tall: false },
+        { id: 8, image: '', visual: 'heart', tall: false },
+      ],
+      customOrdersPage: { card1: '', card2: '', card3: '' },
+    },
   })
 
   // Payment form state
@@ -69,7 +248,7 @@ export default function AdminSettings() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
-  // Load site contact & social settings
+  // Load site contact & social & images settings
   useEffect(() => {
     let active = true
     fetch('/api/admin/site', { cache: 'no-store' })
@@ -81,6 +260,17 @@ export default function AdminSettings() {
             ...json.data,
             social: { ...prev.social, ...(json.data.social || {}) },
             visibility: { ...prev.visibility, ...(json.data.visibility || {}) },
+            images: {
+              ...prev.images,
+              ...(json.data.images || {}),
+              hero: { ...prev.images.hero, ...(json.data.images?.hero || {}) },
+              brandStory: { ...prev.images.brandStory, ...(json.data.images?.brandStory || {}) },
+              customOrderCta: { ...prev.images.customOrderCta, ...(json.data.images?.customOrderCta || {}) },
+              customOrdersPage: { ...prev.images.customOrdersPage, ...(json.data.images?.customOrdersPage || {}) },
+              craftTable: Array.isArray(json.data.images?.craftTable) && json.data.images.craftTable.length
+                ? json.data.images.craftTable
+                : prev.images.craftTable,
+            },
           }))
         }
       })
@@ -113,7 +303,7 @@ export default function AdminSettings() {
   }, [])
 
   async function saveSite(e) {
-    e.preventDefault()
+    if (e) e.preventDefault()
     setError('')
     setNotice('')
     setSiteSaving(true)
@@ -125,7 +315,7 @@ export default function AdminSettings() {
       })
       const json = await res.json()
       if (!res.ok || !json.success) throw new Error(json.error || 'Failed to save site settings.')
-      setNotice('Store contact, location, and social links updated! The changes are now live across the website without requiring any code deploy.')
+      setNotice('Store settings and storefront images updated! The changes are now live across the website without requiring any code deploy.')
     } catch (err) {
       setError(err.message || 'Could not save settings.')
     } finally {
@@ -155,35 +345,59 @@ export default function AdminSettings() {
   }
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="max-w-5xl space-y-6">
       {/* Header */}
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-3xl text-plum">Store & Settings</h1>
           <p className="mt-1 text-sm text-muted">
-            Manage contact information, Instagram/Facebook handles, location, and payment destinations dynamically.
+            Manage contact information, social channels, About page story & makers, storefront visuals, and payment destinations.
           </p>
         </div>
       </header>
 
       {/* Tabs */}
-      <div className="flex border-b border-sand gap-2">
+      <div className="flex border-b border-sand gap-1 sm:gap-2 overflow-x-auto pb-0.5 scrollbar-none">
         <button
           type="button"
-          onClick={() => { setActiveTab('contact'); setError(''); setNotice('') }}
-          className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
+          onClick={() => handleTabChange('contact')}
+          className={`inline-flex items-center gap-2 border-b-2 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold transition shrink-0 ${
             activeTab === 'contact'
               ? 'border-plum text-plum'
               : 'border-transparent text-muted hover:text-plum'
           }`}
         >
           <Store className="h-4 w-4" />
-          <span>Contact & Social Media</span>
+          <span>Contact & Social</span>
         </button>
         <button
           type="button"
-          onClick={() => { setActiveTab('payment'); setError(''); setNotice('') }}
-          className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
+          onClick={() => handleTabChange('about')}
+          className={`inline-flex items-center gap-2 border-b-2 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold transition shrink-0 ${
+            activeTab === 'about'
+              ? 'border-plum text-plum'
+              : 'border-transparent text-muted hover:text-plum'
+          }`}
+        >
+          <BookOpen className="h-4 w-4" />
+          <span>About Page</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange('images')}
+          className={`inline-flex items-center gap-2 border-b-2 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold transition shrink-0 ${
+            activeTab === 'images'
+              ? 'border-plum text-plum'
+              : 'border-transparent text-muted hover:text-plum'
+          }`}
+        >
+          <ImageLucide className="h-4 w-4" />
+          <span>Storefront Media & Images</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange('payment')}
+          className={`inline-flex items-center gap-2 border-b-2 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold transition shrink-0 ${
             activeTab === 'payment'
               ? 'border-plum text-plum'
               : 'border-transparent text-muted hover:text-plum'
@@ -570,7 +784,229 @@ export default function AdminSettings() {
         </div>
       )}
 
-      {/* ================= TAB 2: PAYMENT & UPI ================= */}
+      {/* ================= TAB: ABOUT PAGE ================= */}
+      {activeTab === 'about' && (
+        <AboutTab />
+      )}
+
+      {/* ================= TAB 3: STOREFRONT MEDIA & IMAGES ================= */}
+      {activeTab === 'images' && (
+        <form onSubmit={saveSite} className="space-y-8 min-w-0">
+          {siteLoading ? (
+            <p role="status" className="text-sm text-muted">Loading media settings…</p>
+          ) : (
+            <>
+              {/* Section 1: Hero Top Collage */}
+              <section className="rounded-3xl border border-sand bg-ivory/60 p-4 sm:p-6 space-y-4 min-w-0 overflow-hidden">
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-bloom">Home Page Hero</span>
+                  <h2 className="font-display text-xl text-plum mt-0.5">
+                    Beside "Handmade with love, created especially for you"
+                  </h2>
+                  <p className="text-xs text-muted mt-1">
+                    Upload photos or paste URLs to customize the 3-image collage next to the main hero heading. Leaving any slot empty uses the brand artwork illustration.
+                  </p>
+                </div>
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                  <div className="md:col-span-2">
+                    <ImageField
+                      label="Top Wide Card (Main Hero Showcase)"
+                      description="Wide banner photo at the top of the hero collage (16:9 ratio). Default: Teddy bear illustration."
+                      value={siteForm.images?.hero?.top}
+                      disabled={!canManage}
+                      onChange={(url) => setSiteForm({
+                        ...siteForm,
+                        images: { ...siteForm.images, hero: { ...siteForm.images.hero, top: url } }
+                      })}
+                    />
+                  </div>
+                  <ImageField
+                    label="Bottom-Left Card"
+                    description="Square photo at bottom-left of hero collage. Default: Bouquet illustration."
+                    value={siteForm.images?.hero?.bottomLeft}
+                    disabled={!canManage}
+                    onChange={(url) => setSiteForm({
+                      ...siteForm,
+                      images: { ...siteForm.images, hero: { ...siteForm.images.hero, bottomLeft: url } }
+                    })}
+                  />
+                  <ImageField
+                    label="Bottom-Right Card"
+                    description="Square photo at bottom-right of hero collage. Default: Flower illustration."
+                    value={siteForm.images?.hero?.bottomRight}
+                    disabled={!canManage}
+                    onChange={(url) => setSiteForm({
+                      ...siteForm,
+                      images: { ...siteForm.images, hero: { ...siteForm.images.hero, bottomRight: url } }
+                    })}
+                  />
+                </div>
+              </section>
+
+              {/* Section 2: Why Jamae's Craftopia */}
+              <section className="rounded-3xl border border-sand bg-ivory/60 p-4 sm:p-6 space-y-4 min-w-0 overflow-hidden">
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-bloom">Home Page · Brand Story</span>
+                  <h2 className="font-display text-xl text-plum mt-0.5">
+                    "Why Jamae's Craftopia" Section Images
+                  </h2>
+                  <p className="text-xs text-muted mt-1">
+                    The 3-image layout beside "Made slowly, lovingly, and especially for you".
+                  </p>
+                </div>
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  <ImageField
+                    label="Left Tall Card"
+                    description="Vertical 3:4 photo. Default: Yarn skein."
+                    value={siteForm.images?.brandStory?.left}
+                    disabled={!canManage}
+                    onChange={(url) => setSiteForm({
+                      ...siteForm,
+                      images: { ...siteForm.images, brandStory: { ...siteForm.images.brandStory, left: url } }
+                    })}
+                  />
+                  <ImageField
+                    label="Top-Right Card"
+                    description="Square photo. Default: Heart."
+                    value={siteForm.images?.brandStory?.topRight}
+                    disabled={!canManage}
+                    onChange={(url) => setSiteForm({
+                      ...siteForm,
+                      images: { ...siteForm.images, brandStory: { ...siteForm.images.brandStory, topRight: url } }
+                    })}
+                  />
+                  <ImageField
+                    label="Bottom-Right Card"
+                    description="Horizontal 4:3 photo. Default: Teddy."
+                    value={siteForm.images?.brandStory?.bottomRight}
+                    disabled={!canManage}
+                    onChange={(url) => setSiteForm({
+                      ...siteForm,
+                      images: { ...siteForm.images, brandStory: { ...siteForm.images.brandStory, bottomRight: url } }
+                    })}
+                  />
+                </div>
+              </section>
+
+              {/* Section 3: Made to fit your style */}
+              <section className="rounded-3xl border border-sand bg-ivory/60 p-4 sm:p-6 space-y-4 min-w-0 overflow-hidden">
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-bloom">Home Page · Custom Order CTA</span>
+                  <h2 className="font-display text-xl text-plum mt-0.5">
+                    "Made to fit your style" Section Image
+                  </h2>
+                  <p className="text-xs text-muted mt-1">
+                    The showcase image displayed inside the dark plum clothing banner on the home page.
+                  </p>
+                </div>
+                <div className="max-w-xl">
+                  <ImageField
+                    label="Clothing Banner Card Image"
+                    description="Square photo displayed next to 'Crochet clothes, made especially for you'. Default: Soft yarn art."
+                    value={siteForm.images?.customOrderCta?.banner}
+                    disabled={!canManage}
+                    onChange={(url) => setSiteForm({
+                      ...siteForm,
+                      images: { ...siteForm.images, customOrderCta: { ...siteForm.images.customOrderCta, banner: url } }
+                    })}
+                  />
+                </div>
+              </section>
+
+              {/* Section 4: From the craft table */}
+              <section className="rounded-3xl border border-sand bg-ivory/60 p-4 sm:p-6 space-y-4 min-w-0 overflow-hidden">
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-bloom">Home Page · Behind the scenes</span>
+                  <h2 className="font-display text-xl text-plum mt-0.5">
+                    "From the craft table" Gallery Photos
+                  </h2>
+                  <p className="text-xs text-muted mt-1">
+                    The 8 photo cards in the workshop gallery grid. Upload your own snapshots or leave empty for default brand visuals.
+                  </p>
+                </div>
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                  {siteForm.images?.craftTable?.map((item, idx) => (
+                    <ImageField
+                      key={item.id || idx}
+                      label={`Gallery Photo #${idx + 1}${item.tall ? ' (Tall)' : ''}`}
+                      description={`Slot ${idx + 1} — default visual: ${item.visual || 'yarn'}`}
+                      value={item.image}
+                      disabled={!canManage}
+                      onChange={(url) => {
+                        const next = [...(siteForm.images?.craftTable || [])]
+                        next[idx] = { ...next[idx], image: url }
+                        setSiteForm({
+                          ...siteForm,
+                          images: { ...siteForm.images, craftTable: next }
+                        })
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
+
+              {/* Section 5: Custom Orders Page Showcase */}
+              <section className="rounded-3xl border border-sand bg-ivory/60 p-4 sm:p-6 space-y-4 min-w-0 overflow-hidden">
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-bloom">Custom Orders Page</span>
+                  <h2 className="font-display text-xl text-plum mt-0.5">
+                    Custom Order Page Showcase Cards
+                  </h2>
+                  <p className="text-xs text-muted mt-1">
+                    The 3 inspiration cards displayed above the custom request form at /custom-orders.
+                  </p>
+                </div>
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  <ImageField
+                    label="Card 1 (Teddy slot)"
+                    description="Default: Teddy bear illustration."
+                    value={siteForm.images?.customOrdersPage?.card1}
+                    disabled={!canManage}
+                    onChange={(url) => setSiteForm({
+                      ...siteForm,
+                      images: { ...siteForm.images, customOrdersPage: { ...siteForm.images.customOrdersPage, card1: url } }
+                    })}
+                  />
+                  <ImageField
+                    label="Card 2 (Bouquet slot)"
+                    description="Default: Floral bouquet illustration."
+                    value={siteForm.images?.customOrdersPage?.card2}
+                    disabled={!canManage}
+                    onChange={(url) => setSiteForm({
+                      ...siteForm,
+                      images: { ...siteForm.images, customOrdersPage: { ...siteForm.images.customOrdersPage, card2: url } }
+                    })}
+                  />
+                  <ImageField
+                    label="Card 3 (Gift slot)"
+                    description="Default: Wrapped gift illustration."
+                    value={siteForm.images?.customOrdersPage?.card3}
+                    disabled={!canManage}
+                    onChange={(url) => setSiteForm({
+                      ...siteForm,
+                      images: { ...siteForm.images, customOrdersPage: { ...siteForm.images.customOrdersPage, card3: url } }
+                    })}
+                  />
+                </div>
+              </section>
+
+              {canManage && (
+                <div className="pt-2 sticky bottom-4 z-20">
+                  <button
+                    type="submit"
+                    disabled={siteSaving}
+                    className="rounded-full bg-plum px-8 py-3.5 font-semibold text-cream shadow-lift transition hover:bg-ink disabled:opacity-60 text-sm"
+                  >
+                    {siteSaving ? 'Saving images…' : 'Save all storefront images'}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </form>
+      )}
+
+      {/* ================= TAB 3: PAYMENT & UPI ================= */}
       {activeTab === 'payment' && (
         <div className="max-w-2xl">
           {paymentLoading ? (

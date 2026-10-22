@@ -33,6 +33,20 @@ export default function CustomOrders() {
   const [uploadingImages, setUploadingImages] = useState(false)
   const [customer, setCustomer] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [siteInfo, setSiteInfo] = useState(null)
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/site', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((res) => {
+        if (active && res?.success && res.data) {
+          setSiteInfo(res.data)
+        }
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     fetch('/api/auth/me', { cache: 'no-store' })
@@ -164,19 +178,43 @@ export default function CustomOrders() {
         </section>
 
         <section className="container-page grid gap-4 pb-12 sm:grid-cols-3">
-          <div className="overflow-hidden rounded-3xl">
+          <div className="overflow-hidden rounded-3xl paper-card">
             <div className="aspect-[4/3]">
-              <CraftIllustration visual="teddy" className="h-full" palette={['#E8C9A8', '#F3D5D0', '#4A342C']} />
+              {siteInfo?.images?.customOrdersPage?.card1 ? (
+                <img
+                  src={siteInfo.images.customOrdersPage.card1}
+                  alt="Custom crochet teddy piece"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <CraftIllustration visual="teddy" className="h-full" palette={['#E8C9A8', '#F3D5D0', '#4A342C']} />
+              )}
             </div>
           </div>
-          <div className="overflow-hidden rounded-3xl">
+          <div className="overflow-hidden rounded-3xl paper-card">
             <div className="aspect-[4/3]">
-              <CraftIllustration visual="bouquet" className="h-full" palette={['#F3C9B8', '#E8B4B8', '#F7EFE6']} />
+              {siteInfo?.images?.customOrdersPage?.card2 ? (
+                <img
+                  src={siteInfo.images.customOrdersPage.card2}
+                  alt="Custom crochet floral bouquet"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <CraftIllustration visual="bouquet" className="h-full" palette={['#F3C9B8', '#E8B4B8', '#F7EFE6']} />
+              )}
             </div>
           </div>
-          <div className="overflow-hidden rounded-3xl">
+          <div className="overflow-hidden rounded-3xl paper-card">
             <div className="aspect-[4/3]">
-              <CraftIllustration visual="gift" className="h-full" palette={['#D9CDE8', '#E8B4B8']} />
+              {siteInfo?.images?.customOrdersPage?.card3 ? (
+                <img
+                  src={siteInfo.images.customOrdersPage.card3}
+                  alt="Custom crochet wrapped gift"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <CraftIllustration visual="gift" className="h-full" palette={['#D9CDE8', '#E8B4B8']} />
+              )}
             </div>
           </div>
         </section>
