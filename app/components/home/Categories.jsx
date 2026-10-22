@@ -1,27 +1,32 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { shopCategories } from '@/data/categories'
+import { useInView } from '@/hooks/useInView'
 import CategoryCard from '../ui/CategoryCard'
 import ScrollReveal from '../ui/ScrollReveal'
 import SectionHeading from '../ui/SectionHeading'
 
 export default function Categories() {
-  const [categories, setCategories] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [categories, setCategories] = useState(() => shopCategories)
+  const [containerRef, inView] = useInView({ rootMargin: '350px' })
 
   useEffect(() => {
+    if (!inView) return
+    let active = true
     fetch('/api/categories', { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
-        if (data?.success && Array.isArray(data.data)) setCategories(data.data)
+        if (active && data?.success && Array.isArray(data.data) && data.data.length > 0) {
+          setCategories(data.data)
+        }
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+    return () => { active = false }
+  }, [inView])
 
-  if (loading) return null
   return (
-    <section className="container-page mt-20 sm:mt-28">
+    <section ref={containerRef} className="container-page mt-20 sm:mt-28">
       <SectionHeading
         eyebrow="Wander the shelves"
         title="Shop by category"

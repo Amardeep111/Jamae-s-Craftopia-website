@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { getOptimizedImageUrl } from '@/lib/images'
+import { useInView } from '@/hooks/useInView'
 import Select from './Select'
 import Link from 'next/link'
 
@@ -56,6 +57,7 @@ function StarRating({ rating, max = 5, size = 'md', interactive = false, onSelec
 }
 
 export default function CustomerReviews({ product }) {
+  const [sectionRef, inView] = useInView({ rootMargin: '400px' })
   const [reviews, setReviews] = useState([])
   const [reviewAccess, setReviewAccess] = useState({ authenticated: false, canReview: false })
   const [productRating, setProductRating] = useState(0)
@@ -84,9 +86,9 @@ export default function CustomerReviews({ product }) {
     return () => previews.forEach((url) => URL.revokeObjectURL(url))
   }, [formPhotos])
 
-
   const refreshReviews = useCallback(async () => {
-    const response = await fetch(`/api/reviews/${encodeURIComponent(product?.id || '')}`, { cache: 'no-store' })
+    if (!product?.id) return
+    const response = await fetch(`/api/reviews/${encodeURIComponent(product.id)}`, { cache: 'no-store' })
     const result = await response.json()
     if (response.ok && result.success) {
       setReviews(result.reviews || [])
@@ -94,7 +96,10 @@ export default function CustomerReviews({ product }) {
     }
   }, [product?.id])
 
-  useEffect(() => { refreshReviews().catch(() => {}) }, [refreshReviews])
+  useEffect(() => {
+    if (!inView || !product?.id) return
+    refreshReviews().catch(() => {})
+  }, [inView, product?.id, refreshReviews])
 
   const openLightbox = useCallback((images, start = 0) => {
     setLightbox({ open: true, images, index: start })
@@ -168,7 +173,7 @@ export default function CustomerReviews({ product }) {
   }, [product?.id, productRating, deliveryRating, packagingRating, formText, formTitle, formPhotos, refreshReviews])
 
   return (
-    <section className="container-page mt-16 pt-14 pb-12 border-t border-sand/60" aria-label="Customer Reviews">
+    <section ref={sectionRef} className="container-page mt-16 pt-14 pb-12 border-t border-sand/60" aria-label="Customer Reviews">
       <h2 className="heading-display text-3xl">Customer Reviews</h2>
       <p className="mt-2 text-muted max-w-xl">See what our customers think about this creation.</p>
 

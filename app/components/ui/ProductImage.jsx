@@ -1,3 +1,6 @@
+'use client'
+
+import { useState } from 'react'
 import CraftIllustration from './CraftIllustration'
 import { cn } from '@/lib/cn'
 import Image from 'next/image'
@@ -14,8 +17,11 @@ export default function ProductImage({
   width,
   height,
   priority = false,
+  fit = 'contain',
 }) {
-  if (src) {
+  const [error, setError] = useState(false)
+
+  if (src && !error) {
     const imageSrc = src.startsWith('http')
       ? getOptimizedImageUrl(src, { width: 800, quality: 85 })
       : src
@@ -29,7 +35,8 @@ export default function ProductImage({
           height={height}
           priority={priority}
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          className={cn('object-contain', imgClassName)}
+          className={cn(fit === 'contain' ? 'object-contain' : 'object-cover', imgClassName)}
+          onError={() => setError(true)}
         />
       </div>
     )

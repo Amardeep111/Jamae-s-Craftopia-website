@@ -142,9 +142,12 @@ export default function AdminCategories() {
     {loading ? <p>Loading...</p> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {categories.map(cat => {
         const visible = cat.published && !cat.hidden
-        return <article key={cat.id} className={`rounded-2xl bg-cream p-5 shadow-soft ring-1 ${visible ? 'ring-sand' : 'ring-bloom/30 opacity-70'}`}>
-          {cat.image && <img src={cat.image} alt={cat.name} className="mb-3 h-28 w-full rounded-xl object-cover" />}
-          <div className="flex items-start justify-between gap-2">
+        return <article key={cat.id} className={`min-w-0 overflow-hidden rounded-2xl bg-cream p-5 shadow-soft ring-1 ${visible ? 'ring-sand' : 'ring-bloom/30 opacity-70'}`}>
+          <div className="relative block aspect-[4/5] overflow-hidden rounded-2xl bg-gradient-to-br from-blush/40 to-lavender/30">
+            {cat.image ? <img src={cat.image} alt={cat.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><svg viewBox="0 0 120 120" aria-hidden="true" className="h-24 w-24 opacity-70"><circle cx="60" cy="60" r="44" fill="none" stroke="#D9CDE8" strokeWidth="3"/><circle cx="60" cy="60" r="30" fill="none" stroke="#E8B4B8" strokeWidth="3"/><circle cx="60" cy="60" r="16" fill="none" stroke="#7A645C" strokeWidth="3"/></svg></div>}
+            <span className="absolute left-3 top-3 rounded-full bg-cream/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-plum">Handmade</span>
+          </div>
+          <div className="flex items-start justify-between gap-2 pt-4">
             <h2 className="font-display text-xl text-plum">{cat.name}</h2>
             <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${visible ? 'bg-sage/30 text-plum' : 'bg-bloom/15 text-bloom'}`}>{visible ? 'Visible' : 'Not listed'}</span>
           </div>

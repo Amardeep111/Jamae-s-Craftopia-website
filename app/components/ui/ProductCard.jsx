@@ -13,8 +13,46 @@ import { discountedPrice, useProductDiscount } from '@/lib/promotions'
 export default function ProductCard({ product, className }) {
   const discountPercent = useProductDiscount(product.id)
   const salePrice = discountedPrice(product.price, discountPercent)
-  const categoryName = product.categoryName || product.category?.name || null
-  const photo = product.image || product.images?.[0]
+  const categoryName =
+    product.categoryName ||
+    product.category?.name ||
+    (typeof product.category === 'string'
+      ? categories.find((c) => c.id === product.category || c.slug === product.category)?.name
+      : null) ||
+    null
+
+  let photo = product.imageUrl || product.image || null
+  if (!photo && product.images) {
+    if (Array.isArray(product.images) && product.images.length > 0) {
+      photo = product.images[0]
+    } else if (typeof product.images === 'string') {
+      try {
+        const parsed = JSON.parse(product.images)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          photo = parsed[0]
+        } else if (product.images.startsWith('http') || product.images.startsWith('/')) {
+          photo = product.images
+        }
+      } catch {
+        if (product.images.startsWith('http') || product.images.startsWith('/')) {
+          photo = product.images
+        }
+      }
+    }
+  }
+
+  const palette = Array.isArray(product.palette)
+    ? product.palette
+    : typeof product.palette === 'string'
+      ? (() => {
+          try {
+            const p = JSON.parse(product.palette)
+            return Array.isArray(p) ? p : undefined
+          } catch {
+            return undefined
+          }
+        })()
+      : undefined
 
   return (
     <Card
@@ -26,7 +64,8 @@ export default function ProductCard({ product, className }) {
           src={photo}
           alt={product.name}
           visual={product.visual}
-          palette={product.palette}
+          palette={palette}
+          fit="cover"
           className="h-full w-full"
           imgClassName="object-cover"
         />

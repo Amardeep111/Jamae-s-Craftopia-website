@@ -10,7 +10,8 @@ const STEPS = [
 ]
 
 export default function CheckoutProgress({ current = 'address' }) {
-  const currentIdx = STEPS.findIndex((s) => s.id === current)
+  const normalizedCurrent = current === 'coupon' ? 'summary' : current
+  const currentIdx = STEPS.findIndex((s) => s.id === normalizedCurrent)
 
   return (
     <nav aria-label="Checkout steps" className="flex items-center justify-center gap-0">

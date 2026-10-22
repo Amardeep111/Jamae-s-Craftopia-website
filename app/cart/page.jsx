@@ -1,34 +1,26 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Trash2, Minus, Plus, ShoppingBag, ArrowLeft, Tag, Check } from 'lucide-react'
+import { Trash2, Minus, Plus, ShoppingBag, ArrowLeft, Tag } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import ProductImage from '@/components/ui/ProductImage'
 import { formatPrice } from '@/data/products'
 import { useCartStore } from '@/lib/cart'
-import { useCouponStore, couponDiscountAmount } from '@/lib/coupon'
 
 export default function CartPage() {
   const items = useCartStore((s) => s.items)
   const removeItem = useCartStore((s) => s.removeItem)
   const updateQuantity = useCartStore((s) => s.updateQuantity)
   const updateItemPrices = useCartStore((s) => s.updateItemPrices)
-  const coupon = useCouponStore((s) => s.coupon)
-  const applyCouponFn = useCouponStore((s) => s.apply)
-  const removeCouponFn = useCouponStore((s) => s.remove)
-  const couponLoading = useCouponStore((s) => s.loading)
-  const couponError = useCouponStore((s) => s.error)
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
-  const discountAmount = couponDiscountAmount(coupon, subtotal)
   const gstTotal = items.reduce((sum, item) => sum + (item.gstAmount || Math.round(item.price * (item.gstPercent || 0) / 100)) * item.quantity, 0)
   const codFeeTotal = items.reduce((sum, item) => sum + (item.codFee || 0) * item.quantity, 0)
   const otherChargeTotal = items.reduce((sum, item) => sum + (item.otherCharge || 0) * item.quantity, 0)
-  const total = subtotal - discountAmount + gstTotal + otherChargeTotal
+  const total = subtotal + gstTotal + otherChargeTotal
 
-  const [couponInput, setCouponInput] = useState('')
   const pricesChecked = useRef(false)
 
   useEffect(() => {
@@ -38,15 +30,6 @@ export default function CartPage() {
       .then(async (response) => { const result = await response.json(); if (response.ok && result.success) updateItemPrices(result.data.items) })
       .catch(() => {})
   }, [items, updateItemPrices])
-
-  async function handleApplyCoupon() {
-    const ok = await applyCouponFn(couponInput, subtotal)
-    if (ok) setCouponInput('')
-  }
-
-  function handleRemoveCoupon() {
-    removeCouponFn()
-  }
 
   if (items.length === 0) {
     return (
@@ -167,31 +150,6 @@ export default function CartPage() {
                 <span className="font-semibold text-plum">{formatPrice(subtotal)}</span>
               </div>
 
-              {/* Discount line */}
-              {coupon ? (
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-bloom">
-                    <Check className="h-3.5 w-3.5 shrink-0" />
-                    <span className="font-semibold text-bloom">{coupon.code} — {coupon.label}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveCoupon()}
-                    aria-label="Remove coupon"
-                    className="text-xs text-muted underline transition hover:text-bloom"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : null}
-
-              {discountAmount > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-bloom">Discount</span>
-                  <span className="font-semibold text-bloom">−{formatPrice(discountAmount)}</span>
-                </div>
-              )}
-
               {gstTotal > 0 && <div className="flex justify-between"><span className="text-muted">GST</span><span className="font-semibold text-plum">+{formatPrice(gstTotal)}</span></div>}
               {otherChargeTotal > 0 && <div className="flex justify-between"><span className="text-muted">Other product charges</span><span className="font-semibold text-plum">+{formatPrice(otherChargeTotal)}</span></div>}
               {codFeeTotal > 0 && <div className="flex justify-between"><span className="text-muted">COD fees (if selected)</span><span className="font-semibold text-plum">+{formatPrice(codFeeTotal)}</span></div>}
@@ -202,48 +160,19 @@ export default function CartPage() {
               </div>
 
               <div className="border-t border-sand pt-2 mt-2 flex justify-between">
-                <span className="font-medium text-plum">Total</span>
+                <span className="font-medium text-plum">Estimated Total</span>
                 <span className="font-display text-xl text-plum">{formatPrice(total)}</span>
               </div>
             </div>
 
-            {/* Coupon input */}
-            {!coupon && (
-              <div className="mt-5 pt-4 border-t border-sand">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Tag className="h-3.5 w-3.5 text-muted" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted">Have a coupon?</span>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Enter code"
-                    value={couponInput}
-                    onChange={(e) => {
-                      setCouponInput(e.target.value.toUpperCase())
-                      if (couponError) setCouponError('')
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
-                    className="flex-1 rounded-full border border-sand bg-ivory px-4 py-2 text-sm text-plum placeholder:text-muted/60 outline-none transition focus:border-bloom focus:ring-2 focus:ring-bloom/20"
-                    aria-label="Coupon code"
-                    maxLength={20}
-                  />
-                  <Button
-                    type="button"
-                    onClick={handleApplyCoupon}
-                    disabled={couponLoading}
-                    variant="secondary"
-                    className="shrink-0"
-                  >
-                    {couponLoading ? '…' : 'Apply'}
-                  </Button>
-                </div>
-                {couponError && (
-                  <p className="mt-2 text-xs text-bloom" role="alert">{couponError}</p>
-                )}
-                <p className="mt-2 text-[10px] text-muted/70">Try: CRAFT10, WELCOME15, FIRSTORDER</p>
+            {/* Note: Coupon is applied in Order Summary */}
+            <div className="mt-5 rounded-2xl bg-ivory/80 p-3.5 ring-1 ring-sand/60 text-xs text-muted flex items-start gap-2.5">
+              <Tag className="h-4 w-4 text-bloom shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-plum">Coupons & Offers</p>
+                <p className="mt-0.5 leading-relaxed">You can apply and choose your coupons during the Order Summary step.</p>
               </div>
-            )}
+            </div>
 
             <Link href="/checkout/address" className="mt-5 flex w-full items-center justify-center rounded-full bg-plum px-5 py-2.5 text-sm font-semibold tracking-wide text-cream shadow-soft transition hover:bg-ink hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0">
               Proceed to Checkout

@@ -410,7 +410,18 @@ const bgMap = {
 
 export default function CraftIllustration({ visual = 'yarn', palette, view = 1, className = '' }) {
   const Graphic = visuals[visual] || Yarn
-  const colors = palette || ['#E8B4B8', '#D9CDE8', '#5A3D4A']
+  const colors = Array.isArray(palette) && palette.length > 0
+    ? palette
+    : (typeof palette === 'string'
+        ? (() => {
+            try {
+              const p = JSON.parse(palette)
+              return Array.isArray(p) && p.length > 0 ? p : ['#E8B4B8', '#D9CDE8', '#5A3D4A']
+            } catch {
+              return ['#E8B4B8', '#D9CDE8', '#5A3D4A']
+            }
+          })()
+        : ['#E8B4B8', '#D9CDE8', '#5A3D4A'])
   return (
     <div className={`flex items-center justify-center bg-gradient-to-br ${bgMap[visual] || bgMap.yarn} ${className}`}>
       <div className="h-[78%] w-[78%]">

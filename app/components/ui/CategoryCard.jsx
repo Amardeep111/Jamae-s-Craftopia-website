@@ -25,6 +25,7 @@ export default function CategoryCard({ category, className }) {
           src={category.image}
           alt=""
           visual={visualByCategory[category.id] || 'yarn'}
+          fit="cover"
           className="h-full w-full"
         />
       </div>
