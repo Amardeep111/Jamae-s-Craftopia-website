@@ -7,7 +7,7 @@ import ScrollReveal from '@/components/ui/ScrollReveal'
 import SectionHeading from '@/components/ui/SectionHeading'
 import { getAboutContent } from '@/lib/about'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 const VALUE_ICONS = [Heart, Sparkles, Leaf]
 
@@ -43,7 +43,7 @@ export default async function About() {
           <SectionHeading
             align="left"
             title={story?.title || 'Our story'}
-            description={story?.description || 'Tina and Papia — two sisters, one practice. A home-grown craft table in Siliguri, where handmade pieces carry stories, names, and care.'}
+            description={story?.description || 'Two sisters, one practice. A home-grown craft table in Siliguri, where handmade pieces carry stories, names, and care.'}
           />
           <div className="mt-6 space-y-4 leading-relaxed text-muted">
             <p>

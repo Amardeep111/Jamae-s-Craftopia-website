@@ -6,22 +6,7 @@ import { prisma } from '@/lib/db/client'
 
 const CONTENT_FILE = path.join(process.cwd(), 'app', 'data', 'about-content.json')
 
-let inMemoryAboutContent = null
-let dbColumnsEnsured = false
-
-async function ensureDbColumns() {
-  if (dbColumnsEnsured || !prisma) return
-  try {
-    await prisma.$executeRawUnsafe(`
-      ALTER TABLE "StoreSetting" 
-      ADD COLUMN IF NOT EXISTS "aboutContent" JSONB,
-      ADD COLUMN IF NOT EXISTS "siteContent" JSONB;
-    `)
-    dbColumnsEnsured = true
-  } catch (err) {
-    // Non-critical if table doesn't exist yet or connection fails
-  }
-}
+let inMemoryAboutContent = defaultContent
 
 function readDiskOrTmp(targetFile, filename) {
   try {
@@ -55,24 +40,41 @@ export function mergeAboutContent(parsed) {
 }
 
 export async function getAboutContent() {
-  if (inMemoryAboutContent) return inMemoryAboutContent
-
   try {
     if (prisma?.storeSetting) {
-      const row = await Promise.race([
-        prisma.storeSetting.findUnique({
-          where: { id: 'main' },
+      const queryPromise = prisma.storeSetting.findUnique({
+        where: { id: 'main' },
+        select: { aboutContent: true },
+      }).then(async (row) => {
+        if (row?.aboutContent) return row
+        return prisma.storeSetting.findFirst({
           select: { aboutContent: true },
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 500)),
+        })
+      })
+
+      const row = await Promise.race([
+        queryPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500)),
       ]).catch(() => null)
-      if (row?.aboutContent && typeof row.aboutContent === 'object') {
-        inMemoryAboutContent = mergeAboutContent(row.aboutContent)
+
+      let rawContent = row?.aboutContent
+      if (typeof rawContent === 'string') {
+        try {
+          rawContent = JSON.parse(rawContent)
+        } catch {}
+      }
+
+      if (rawContent && typeof rawContent === 'object') {
+        inMemoryAboutContent = mergeAboutContent(rawContent)
         return inMemoryAboutContent
       }
     }
   } catch (err) {
     console.warn('Failed to load about content from database:', err.message)
+  }
+
+  if (inMemoryAboutContent && inMemoryAboutContent !== defaultContent) {
+    return inMemoryAboutContent
   }
 
   const disk = readDiskOrTmp(CONTENT_FILE, 'about-content.json')
@@ -97,7 +99,7 @@ export function getAboutContentSync() {
 
 export async function saveAboutContent(content) {
   try {
-    const current = await getAboutContent()
+    const current = inMemoryAboutContent || defaultContent
     const merged = mergeAboutContent({
       ...current,
       ...content,
@@ -111,15 +113,17 @@ export async function saveAboutContent(content) {
 
     inMemoryAboutContent = merged
 
-    // 1. Persist to database if prisma is available
+    // 1. Persist to database if prisma is available (with 5s safety timeout)
     try {
       if (prisma?.storeSetting) {
-        await ensureDbColumns()
-        await prisma.storeSetting.upsert({
-          where: { id: 'main' },
-          create: { id: 'main', aboutContent: merged },
-          update: { aboutContent: merged },
-        })
+        await Promise.race([
+          prisma.storeSetting.upsert({
+            where: { id: 'main' },
+            create: { id: 'main', aboutContent: merged },
+            update: { aboutContent: merged },
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Database write timeout')), 5000)),
+        ])
       }
     } catch (dbErr) {
       console.warn('Failed to persist about content to database:', dbErr.message)
