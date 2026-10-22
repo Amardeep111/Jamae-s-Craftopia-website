@@ -9,7 +9,6 @@ import ProductCard from '@/components/ui/ProductCard'
 import Select from '@/components/ui/Select'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import { shopCategories } from '@/data/categories'
-import { products as sampleProducts } from '@/data/products'
 import { useInView } from '@/hooks/useInView'
 import { cn } from '@/lib/cn'
 
@@ -28,10 +27,10 @@ function ShopContent() {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('featured')
 
-  // Instant initial render: show sample catalog & categories immediately
-  const [catalog, setCatalog] = useState(() => sampleProducts)
+  // Initial render state: load catalog from API with skeleton placeholder
+  const [catalog, setCatalog] = useState([])
   const [categories, setCategories] = useState(() => shopCategories)
-  const [loadingInitial, setLoadingInitial] = useState(false)
+  const [loadingInitial, setLoadingInitial] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [error, setError] = useState(null)
@@ -219,7 +218,24 @@ function ShopContent() {
           ))}
         </div>
 
-        {filtered.length === 0 && !loadingInitial ? (
+        {loadingInitial ? (
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="mt-12 text-center">
+            <h2 className="font-display text-2xl text-plum">Shelf is loading</h2>
+            <p className="mt-2 text-muted">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 rounded-full bg-plum px-6 py-2 text-sm font-semibold text-cream"
+            >
+              Refresh
+            </button>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="mt-12">
             <EmptyState
               title="Nothing matches just yet"

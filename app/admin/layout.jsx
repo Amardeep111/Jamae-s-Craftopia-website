@@ -37,7 +37,7 @@ export default async function AdminLayout({ children }) {
           {can('categories.view') && <AdminNavLink href="/admin/categories" icon={<Tag className="h-4 w-4" />} label="Categories" />}
           {can('coupons.view') && <AdminNavLink href="/admin/coupons" icon={<Tag className="h-4 w-4" />} label="Coupons" />}
           {can('settings.view') && <AdminNavLink href="/admin/about" icon={<BookOpen className="h-4 w-4" />} label="About page" />}
-          {can('settings.view') && <AdminNavLink href="/admin/settings" icon={<Settings className="h-4 w-4" />} label="Payment settings" />}
+          {can('settings.view') && <AdminNavLink href="/admin/settings" icon={<Settings className="h-4 w-4" />} label="Store & payment" />}
           {isSuperadmin && <AdminNavLink href="/admin/admins" icon={<Shield className="h-4 w-4" />} label="Admin access" />}
           <AdminNavLink href="/admin/account" icon={<UserRound className="h-4 w-4" />} label="My account" />
         </div>
