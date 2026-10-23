@@ -272,6 +272,18 @@ export async function POST(request) {
           shipping,
           fee,
           notes: idempotencyKey ? `${notes || ''} | idempotency:${idempotencyKey}`.trim() : (notes || null),
+          paymentLogs: {
+            create: [
+              {
+                amount: subtotal + shipping + fee - serverVerifiedDiscount,
+                status: method === 'cod' ? 'COD_PENDING_COLLECTION' : 'AWAITING_VERIFICATION',
+                method: paymentMethod || null,
+                utr: method === 'upi' && typeof paymentReference === 'string' ? paymentReference.trim().slice(0, 80) || null : null,
+                provider: method === 'cod' ? 'COD' : 'UPI',
+                providerReference: method === 'upi' && typeof paymentReference === 'string' ? paymentReference.trim().slice(0, 80) || null : null,
+              },
+            ],
+          },
           items: {
             create: orderItems.map(item => ({
               productId: item.productId,

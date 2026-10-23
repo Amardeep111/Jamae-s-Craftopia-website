@@ -191,6 +191,22 @@ export const mockDb = {
       trackingNumber: null,
       shippingPartner: null,
       estimatedDelivery: null,
+      paymentLogs: [
+        {
+          id: `plog_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          orderId: id,
+          amount: total,
+          status: data.paymentStatus || (data.paymentMethod === 'Cash on Delivery' ? 'COD_PENDING_COLLECTION' : 'PENDING'),
+          method: data.paymentMethod || null,
+          utr: data.paymentReference || null,
+          provider: data.paymentMethod === 'Cash on Delivery' ? 'COD' : 'UPI',
+          providerReference: data.paymentReference || null,
+          verifiedBy: null,
+          verifiedAt: null,
+          createdAt: now,
+        },
+      ],
+      refundRequests: [],
       createdAt: now,
       updatedAt: now,
     }

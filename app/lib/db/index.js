@@ -1,5 +1,5 @@
-import { prisma, shouldUseMockData, testDatabaseConnection } from './client'
-import { mockDb } from './mock'
+import { prisma, shouldUseMockData, testDatabaseConnection } from './client.js'
+import { mockDb } from './mock.js'
 
 // Universal database abstraction layer
 export const db = {
@@ -173,7 +173,20 @@ export const db = {
           fee: data.fee || 0,
           paymentMethod: data.paymentMethod || null,
           paymentStatus: data.paymentStatus || 'PENDING',
+          paymentReference: data.paymentReference || null,
           notes: data.notes,
+          paymentLogs: {
+            create: [
+              {
+                amount: data.totalAmount,
+                status: data.paymentStatus || 'PENDING',
+                method: data.paymentMethod || null,
+                utr: data.paymentReference || null,
+                provider: data.paymentMethod === 'Cash on Delivery' ? 'COD' : 'UPI',
+                providerReference: data.paymentReference || null,
+              },
+            ],
+          },
           items: {
             create: data.items.map(item => ({
               productId: item.productId,
@@ -187,7 +200,7 @@ export const db = {
             })),
           },
         },
-        include: { items: { include: { product: true } } },
+        include: { items: { include: { product: true } }, paymentLogs: { orderBy: { createdAt: 'desc' } } },
       })
     })
   },
@@ -205,6 +218,9 @@ export const db = {
             product: true,
           },
         },
+        paymentLogs: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
     })
   },
@@ -219,11 +235,15 @@ export const db = {
         items: {
           include: { product: true },
         },
+        paymentLogs: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
     })
   },
 
   async getOrdersByEmail(email) {
+    if (!email) return []
     if (shouldUseMockData()) {
       return mockDb.getOrdersByEmail(email)
     }
@@ -231,6 +251,9 @@ export const db = {
       where: { customerEmail: email },
       include: {
         items: { include: { product: true } },
+        paymentLogs: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
