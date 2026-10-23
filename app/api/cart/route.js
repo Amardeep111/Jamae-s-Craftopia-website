@@ -69,13 +69,31 @@ export async function PUT(request) {
     const allowed = new Set(products.map((product) => product.id))
     const items = [...quantities].filter(([productId]) => allowed.has(productId)).map(([productId, quantity]) => ({ productId, quantity }))
 
-    const savedCart = await prisma.$transaction(async (tx) => {
-      const cart = await tx.cart.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} })
-      await tx.cartItem.deleteMany({ where: { cartId: cart.id } })
-      if (items.length) await tx.cartItem.createMany({ data: items.map((item) => ({ ...item, cartId: cart.id })) })
-      return tx.cart.findUnique({ where: { id: cart.id }, include: { items: { include: { product: true }, orderBy: { createdAt: 'asc' } } } })
+    const cart = await prisma.cart.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id },
+      update: {},
+      select: { id: true },
     })
-    return NextResponse.json({ success: true, data: (savedCart?.items || []).map(responseItem) })
+
+    if (items.length === 0) {
+      await prisma.cartItem.deleteMany({ where: { cartId: cart.id } })
+      return NextResponse.json({ success: true, data: [] })
+    }
+
+    // Batch delete & recreate using non-interactive array transaction (compatible with Supabase PgBouncer pooler)
+    await prisma.$transaction([
+      prisma.cartItem.deleteMany({ where: { cartId: cart.id } }),
+      prisma.cartItem.createMany({ data: items.map((item) => ({ ...item, cartId: cart.id })) }),
+    ])
+
+    const savedItems = await prisma.cartItem.findMany({
+      where: { cartId: cart.id },
+      include: { product: true },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    return NextResponse.json({ success: true, data: savedItems.map(responseItem) })
   } catch (error) {
     console.error('Saved cart update failed:', error)
     return NextResponse.json({ success: false, error: 'Could not save your cart.' }, { status: 500 })
