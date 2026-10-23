@@ -17,16 +17,36 @@ export default function CurrentLocationPicker({ onSelect, disabled }) {
     }
     setLoading(true)
     setErrorMsg('')
+    function handleSuccess(position) {
+      setLoading(false)
+      onSelect?.({ lat: position.coords.latitude, lng: position.coords.longitude, source: 'geolocation' })
+    }
+
+    function handleError(err) {
+      setLoading(false)
+      setErrorMsg(
+        err.code === 1
+          ? 'Location permission denied. Please enter manually.'
+          : err.code === 3
+          ? 'Location detection timed out. Please enter manually or try again.'
+          : 'Could not read location. Please enter manually.'
+      )
+    }
+
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLoading(false)
-        onSelect?.({ lat: position.coords.latitude, lng: position.coords.longitude, source: 'geolocation' })
-      },
+      handleSuccess,
       (err) => {
-        setLoading(false)
-        setErrorMsg(err.code === 1 ? 'Location permission denied. Please enter manually.' : 'Location error.')
+        if (err.code === 3 || err.code === 2) {
+          navigator.geolocation.getCurrentPosition(
+            handleSuccess,
+            handleError,
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+          )
+        } else {
+          handleError(err)
+        }
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 5500, maximumAge: 0 }
     )
   }
 

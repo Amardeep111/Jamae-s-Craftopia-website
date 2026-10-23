@@ -287,48 +287,59 @@ export default function InteractiveLocationPicker({
       return
     }
 
+    function handleSuccess(pos) {
+      const lat = pos.coords.latitude
+      const lng = pos.coords.longitude
+      if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {
+        setLocating(false)
+        setLocationData({ error: 'Could not read your location. Please try again or enter manually.' })
+        return
+      }
+      setMarkerPosition({ lat, lng })
+      if (mapRef.current && mapStatusRef.current === 'ready') {
+        mapRef.current.flyTo({ center: [lng, lat], zoom: 16, essential: true })
+        placeMarker(lng, lat, mapRef.current)
+      } else if (mapRef.current) {
+        try {
+          mapRef.current.jumpTo({ center: [lng, lat], zoom: 16 })
+        } catch (_) {
+          /* noop */
+        }
+      }
+      reverseGeocode(lat, lng)
+      setLocating(false)
+    }
+
+    function handleError(err) {
+      setLocating(false)
+      if (err.code === 1) {
+        setPermissionDenied(true)
+        setLocationData({ error: 'Location access was not allowed. You can enter your address manually.' })
+      } else if (err.code === 2) {
+        setLocationData({ error: 'Your location is unavailable. Please enter your address manually.' })
+      } else if (err.code === 3) {
+        setLocationData({ error: 'Location detection timed out. Please try again or enter manually.' })
+      } else {
+        setLocationData({ error: 'Location detection failed. Please try again or enter manually.' })
+      }
+    }
+
+    // Try high accuracy first (5.5s timeout). If it times out (code 3) or position unavailable (code 2),
+    // immediately fall back to low-accuracy network/Wi-Fi positioning which resolves reliably in <500ms.
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude
-        const lng = pos.coords.longitude
-        // Validate real numbers
-        if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {
-          setLocating(false)
-          setLocationData({ error: 'Could not read your location. Please try again or enter manually.' })
-          return
-        }
-        setMarkerPosition({ lat, lng })
-        // Move the map (only if it's actually ready)
-        if (mapRef.current && mapStatusRef.current === 'ready') {
-          mapRef.current.flyTo({ center: [lng, lat], zoom: 16, essential: true })
-          // Place or move the marker
-          placeMarker(lng, lat, mapRef.current)
-        } else if (mapRef.current) {
-          // Map exists but isn't ready yet — center without flying (it would be a no-op anyway)
-          try {
-            mapRef.current.jumpTo({ center: [lng, lat], zoom: 16 })
-          } catch (_) {
-            /* noop */
-          }
-        }
-        // Reverse geocode (independent of map readiness)
-        reverseGeocode(lat, lng)
-        setLocating(false)
-      },
+      handleSuccess,
       (err) => {
-        setLocating(false)
-        if (err.code === 1) {
-          setPermissionDenied(true)
-          setLocationData({ error: 'Location access was not allowed. You can enter your address manually.' })
-        } else if (err.code === 2) {
-          setLocationData({ error: 'Your location is unavailable. Please enter your address manually.' })
-        } else if (err.code === 3) {
-          setLocationData({ error: 'Location detection timed out. Please try again or enter manually.' })
+        if (err.code === 3 || err.code === 2) {
+          navigator.geolocation.getCurrentPosition(
+            handleSuccess,
+            handleError,
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+          )
         } else {
-          setLocationData({ error: 'Location detection failed. Please try again or enter manually.' })
+          handleError(err)
         }
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 5500, maximumAge: 0 }
     )
   }, [reverseGeocode, placeMarker])
 
@@ -416,23 +427,39 @@ export default function InteractiveLocationPicker({
       <div className="relative">
         {/* Free geolocation fallback UI (no mapbox token) */}
         {!isMapboxAvailable && (
-          <div className="w-full h-72 sm:h-80 md:h-72 bg-gradient-to-br from-sand/30 to-blush/20 flex flex-col items-center justify-center p-6" style={{ minHeight: 260 }}>
-            <div className="text-center space-y-4">
-              <div className="mx-auto h-16 w-16 rounded-full bg-plum/10 flex items-center justify-center">
-                <LocateFixed className="h-8 w-8 text-plum" aria-hidden="true" />
+          <div className="relative w-full h-72 sm:h-80 md:h-72 bg-gradient-to-br from-sand/30 to-blush/20 flex flex-col items-center justify-center p-6" style={{ minHeight: 260 }}>
+            {locating ? (
+              <div className="text-center space-y-4">
+                <div className="mx-auto h-16 w-16 rounded-full bg-bloom/10 flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 text-bloom animate-spin" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg text-plum">Detecting your location…</h3>
+                  <p className="text-sm text-muted mt-1 max-w-xs mx-auto">
+                    Please allow location permission in your browser if prompted.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-display text-lg text-plum">Detect your location</h3>
-                <p className="text-sm text-muted mt-1">We'll use your browser's GPS to find your address</p>
+            ) : (
+              <div className="text-center space-y-4">
+                <div className="mx-auto h-16 w-16 rounded-full bg-plum/10 flex items-center justify-center">
+                  <LocateFixed className="h-8 w-8 text-plum" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg text-plum">Detect your location</h3>
+                  <p className="text-sm text-muted mt-1">We'll use your browser's location to find your address</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={requestLocation}
+                  disabled={locating || reverseGeocoding}
+                  className="inline-flex items-center gap-2 rounded-full bg-plum px-5 py-2.5 text-sm font-semibold text-cream shadow-soft hover:bg-ink transition disabled:opacity-50"
+                >
+                  <MapPin className="h-4 w-4" />
+                  Use my current location
+                </button>
               </div>
-              <CurrentLocationPicker
-                onSelect={(pos) => {
-                  setMarkerPosition({ lat: pos.lat, lng: pos.lng })
-                  reverseGeocode(pos.lat, pos.lng)
-                }}
-                disabled={locating || reverseGeocoding}
-              />
-            </div>
+            )}
           </div>
         )}
 

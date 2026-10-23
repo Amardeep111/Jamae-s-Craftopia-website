@@ -68,7 +68,7 @@ export default function ProfilePage() {
       const result = await response.json().catch(() => ({}))
       if (!response.ok || !result.success) throw new Error(result.error || 'Could not save this address.')
       await loadProfile(); setShowAddressForm(false); setEditingId(''); setNotice(editingId ? 'Address updated.' : 'Address saved.')
-    } catch (cause) { setError(cause.message || 'Could not save this address.') } finally { setSavingAddress(false) }
+    } catch (cause) { setError(cause.message || 'Could not save this address.'); throw cause } finally { setSavingAddress(false) }
   }
 
   async function deleteAddress(id) {
@@ -123,8 +123,9 @@ export default function ProfilePage() {
     <AddressForm
       open={showAddressForm}
       initial={editingId ? addressForm : null}
-      onClose={() => setShowAddressForm(false)}
+      onClose={() => { if (!savingAddress) setShowAddressForm(false) }}
       onSave={saveAddress}
+      saving={savingAddress}
     />
     <Link href="/orders/me" className="inline-block text-sm font-semibold text-plum underline underline-offset-4">View my orders</Link>
   </main>

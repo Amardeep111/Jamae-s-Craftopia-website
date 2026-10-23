@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ChevronLeft, Minus, Plus, Flower2 } from 'lucide-react'
 import { useCartStore } from '@/lib/cart'
 import { categories } from '@/data/categories'
@@ -18,6 +19,7 @@ import CustomerReviews from '@/components/ui/CustomerReviews'
 import { discountedPrice, useProductPricing } from '@/lib/promotions'
 
 export default function ProductDetailsClient({ initialProduct, productId }) {
+  const router = useRouter()
   const [product, setProduct] = useState(initialProduct || null)
   const [productResolved, setProductResolved] = useState(Boolean(initialProduct))
   const [relatedProducts, setRelatedProducts] = useState([])
@@ -340,7 +342,7 @@ export default function ProductDetailsClient({ initialProduct, productId }) {
                 onClick={() => {
                   if (outOfStock || locationRestricted) return
                   addItem(cartProduct, qty)
-                  window.location.href = '/checkout/address'
+                  router.push('/checkout/address')
                 }}
               >
                 Buy Now

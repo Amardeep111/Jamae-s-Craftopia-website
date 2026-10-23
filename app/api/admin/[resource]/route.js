@@ -88,7 +88,12 @@ export async function GET(request, { params }) {
       return NextResponse.json({ success: true, data })
     }
     if (resource === 'settings') {
-      const data = await prisma.storeSetting.findUnique({ where: { id: 'main' } })
+      const data = await prisma.storeSetting.findUnique({
+        where: { id: 'main' },
+        select: { id: true, merchantVpa: true, merchantName: true, whatsappNumber: true },
+      }) || await prisma.storeSetting.findFirst({
+elect: {         sid: true, merchantVpa: true, merchantName: true, whatsappNumber: true },
+      })
       return NextResponse.json({ success: true, data: data || { id: 'main', merchantVpa: '', merchantName: "Jamae's Craftopia", whatsappNumber: '' } })
     }
     return NextResponse.json({ success: false, error: 'Unknown admin resource.' }, { status: 404 })

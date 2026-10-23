@@ -61,6 +61,7 @@ export default function CheckoutCouponPage() {
       }
     }
     fetchCoupons()
+    fetch('/api/payment/upi-details').catch(() => {})
   }, [])
 
   async function handleApply(codeToApply) {

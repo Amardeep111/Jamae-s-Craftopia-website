@@ -21,7 +21,7 @@ export default function UpiForm({ total, orderId, onSubmit, loading }) {
 
   useEffect(() => {
     setIsMobile(supportsUpiAppOpen())
-    fetch('/api/payment/upi-details', { cache: 'no-store' })
+    fetch('/api/payment/upi-details')
       .then(async (response) => {
         const result = await response.json().catch(() => ({}))
         if (!response.ok || !result.success) throw new Error(result.error || 'UPI payments are not configured yet.')
