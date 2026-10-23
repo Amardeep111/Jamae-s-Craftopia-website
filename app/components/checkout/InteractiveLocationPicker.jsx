@@ -5,6 +5,8 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { MapPin, RefreshCcw, Crosshair, AlertCircle, Loader2, Navigation, LocateFixed } from 'lucide-react'
 import CurrentLocationPicker from '@/components/ui/location/CurrentLocationPicker'
+import Select from '@/components/ui/Select'
+import { STATE_OPTIONS, getStateAndCityFromPin } from '@/lib/address/india'
 
 /*
  * Real, production Mapbox location picker with free geolocation fallback.
@@ -452,6 +454,49 @@ export default function InteractiveLocationPicker({
     })
   }
 
+  const handleDetectedPinChange = (value) => {
+    const pin = value.replace(/\D/g, '').slice(0, 6)
+    updateDetectedAddress('pinCode', pin)
+    if (pin.length === 6) {
+      const local = getStateAndCityFromPin(pin)
+      if (local) {
+        setLocationData((current) => {
+          if (!current || current.error) return current
+          return {
+            ...current,
+            pinCode: pin,
+            state: local.state || current.state,
+            city: current.city || local.city || '',
+          }
+        })
+      }
+      // Strict 2-second bounded enrichment for district/city name
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 2000)
+      fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal: controller.signal })
+        .then((res) => res.json())
+        .then((result) => {
+          clearTimeout(timer)
+          if (Array.isArray(result) && result[0]?.Status === 'Success' && result[0]?.PostOffice?.length) {
+            const po = result[0].PostOffice[0]
+            const stateName = po.State
+            const cityName = po.District || po.Block || po.Division || ''
+            setLocationData((current) => {
+              if (!current || current.error) return current
+              return {
+                ...current,
+                state: stateName || current.state,
+                city: current.city || cityName || '',
+              }
+            })
+          }
+        })
+        .catch(() => {
+          clearTimeout(timer)
+        })
+    }
+  }
+
   // ── Hard error state (token missing etc.) ──────────────────────────────
   if (mapError) {
     return (
@@ -604,8 +649,18 @@ export default function InteractiveLocationPicker({
             <div className="grid gap-3 sm:grid-cols-2">
               <DetectedField label="Area / Street" value={locationData.areaStreet || locationData.street || locationData.area || ''} onChange={(value) => updateDetectedAddress('areaStreet', value)} />
               <DetectedField label="City" value={locationData.city || ''} onChange={(value) => updateDetectedAddress('city', value)} />
-              <DetectedField label="State" value={locationData.state || ''} onChange={(value) => updateDetectedAddress('state', value)} />
-              <DetectedField label="PIN Code" value={locationData.pinCode || ''} onChange={(value) => updateDetectedAddress('pinCode', value)} inputMode="numeric" maxLength={6} />
+              <div>
+                <label htmlFor="detected-state-select" className="block text-sm font-medium text-plum mb-1">State</label>
+                <Select
+                  id="detected-state-select"
+                  value={locationData.state || ''}
+                  onChange={(value) => updateDetectedAddress('state', value)}
+                  options={STATE_OPTIONS}
+                  placeholder="Select state"
+                  className="!w-full !bg-cream !rounded-xl"
+                />
+              </div>
+              <DetectedField label="PIN Code" value={locationData.pinCode || ''} onChange={handleDetectedPinChange} inputMode="numeric" maxLength={6} />
               <DetectedField label="Country" value={locationData.country || ''} onChange={(value) => updateDetectedAddress('country', value)} />
             </div>
 
