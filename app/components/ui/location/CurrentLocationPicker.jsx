@@ -11,42 +11,62 @@ export default function CurrentLocationPicker({ onSelect, disabled }) {
   const [errorMsg, setErrorMsg] = useState('')
 
   async function handleUseCurrent() {
-    if (!navigator.geolocation) {
-      setErrorMsg('Geolocation not supported by this browser.')
-      return
-    }
     setLoading(true)
     setErrorMsg('')
+    let resolved = false
+
     function handleSuccess(position) {
+      if (resolved) return
+      resolved = true
       setLoading(false)
       onSelect?.({ lat: position.coords.latitude, lng: position.coords.longitude, source: 'geolocation' })
     }
 
-    function handleError(err) {
+    async function fallbackToIp() {
+      if (resolved) return
+      resolved = true
+      try {
+        const res = await fetch('/api/location/detect')
+        const json = await res.json()
+        if (json.success && json.data?.lat && json.data?.lng) {
+          setLoading(false)
+          onSelect?.({ lat: json.data.lat, lng: json.data.lng, source: 'network-ip' })
+          return
+        }
+      } catch (_) {}
       setLoading(false)
-      setErrorMsg(
-        err.code === 1
-          ? 'Location permission denied. Please enter manually.'
-          : err.code === 3
-          ? 'Location detection timed out. Please enter manually or try again.'
-          : 'Could not read location. Please enter manually.'
-      )
+      setErrorMsg('Could not detect location. Please enter manually.')
     }
 
+    if (!navigator.geolocation) {
+      fallbackToIp()
+      return
+    }
+
+    // Browser geolocation is PRIMARY.
     navigator.geolocation.getCurrentPosition(
       handleSuccess,
-      (err) => {
-        if (err.code === 3 || err.code === 2) {
-          navigator.geolocation.getCurrentPosition(
-            handleSuccess,
-            handleError,
-            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-          )
-        } else {
-          handleError(err)
+      (err1) => {
+        if (err1.code === 1) {
+          setLoading(false)
+          setErrorMsg('Location permission denied. Please enter manually.')
+          return
         }
+        navigator.geolocation.getCurrentPosition(
+          handleSuccess,
+          (err2) => {
+            if (err2.code === 1) {
+              setLoading(false)
+              setErrorMsg('Location permission denied. Please enter manually.')
+              return
+            }
+            // Pure fallback: both browser geolocation attempts failed or timed out
+            fallbackToIp()
+          },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+        )
       },
-      { enableHighAccuracy: true, timeout: 5500, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
     )
   }
 

@@ -281,18 +281,15 @@ export default function InteractiveLocationPicker({
     setMapError('')
     setNetworkError('')
 
-    if (typeof window === 'undefined' || !navigator.geolocation) {
-      setLocating(false)
-      setLocationData({ error: 'Your browser does not support location services.' })
-      return
-    }
+    let resolvedLoc = false
 
-    function handleSuccess(pos) {
+    const handleSuccess = (pos) => {
+      if (resolvedLoc) return
+      resolvedLoc = true
       const lat = pos.coords.latitude
       const lng = pos.coords.longitude
       if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {
-        setLocating(false)
-        setLocationData({ error: 'Could not read your location. Please try again or enter manually.' })
+        fallbackToIp()
         return
       }
       setMarkerPosition({ lat, lng })
@@ -310,36 +307,104 @@ export default function InteractiveLocationPicker({
       setLocating(false)
     }
 
-    function handleError(err) {
-      setLocating(false)
-      if (err.code === 1) {
-        setPermissionDenied(true)
-        setLocationData({ error: 'Location access was not allowed. You can enter your address manually.' })
-      } else if (err.code === 2) {
-        setLocationData({ error: 'Your location is unavailable. Please enter your address manually.' })
-      } else if (err.code === 3) {
-        setLocationData({ error: 'Location detection timed out. Please try again or enter manually.' })
-      } else {
-        setLocationData({ error: 'Location detection failed. Please try again or enter manually.' })
+    const fallbackToIp = async () => {
+      if (resolvedLoc) return
+      resolvedLoc = true
+      try {
+        const res = await fetch('/api/location/detect')
+        const json = await res.json()
+        if (json.success && json.data?.lat && json.data?.lng) {
+          const { lat, lng, city, state, pinCode, country } = json.data
+          setMarkerPosition({ lat, lng })
+          if (mapRef.current && mapStatusRef.current === 'ready') {
+            mapRef.current.flyTo({ center: [lng, lat], zoom: 15, essential: true })
+            placeMarker(lng, lat, mapRef.current)
+          } else if (mapRef.current) {
+            try {
+              mapRef.current.jumpTo({ center: [lng, lat], zoom: 15 })
+            } catch (_) {
+              /* noop */
+            }
+          }
+          try {
+            const geoRes = await fetch('/api/geocode', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ lat, lng }),
+            })
+            const geoData = await geoRes.json()
+            if (geoData.success && geoData.address) {
+              setLocationData({ ...geoData.address, coordinates: { lat, lng } })
+              setResolved(true)
+            } else {
+              setLocationData({
+                city: city || '',
+                state: state || '',
+                country: country || 'India',
+                pinCode: pinCode || '',
+                areaStreet: city ? `${city}, ${state}` : '',
+                formattedAddress: [city, state, country].filter(Boolean).join(', '),
+                coordinates: { lat, lng },
+              })
+              setResolved(true)
+            }
+          } catch (_) {
+            setLocationData({
+              city: city || '',
+              state: state || '',
+              country: country || 'India',
+              pinCode: pinCode || '',
+              areaStreet: city ? `${city}, ${state}` : '',
+              formattedAddress: [city, state, country].filter(Boolean).join(', '),
+              coordinates: { lat, lng },
+            })
+            setResolved(true)
+          }
+          setLocating(false)
+          return
+        }
+      } catch (e) {
+        console.warn('IP location fallback error:', e)
       }
+      setLocating(false)
+      setLocationData({ error: 'Could not detect your location. Please enter your address manually.' })
     }
 
-    // Try high accuracy first (5.5s timeout). If it times out (code 3) or position unavailable (code 2),
-    // immediately fall back to low-accuracy network/Wi-Fi positioning which resolves reliably in <500ms.
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      fallbackToIp()
+      return
+    }
+
+    // Browser geolocation is PRIMARY.
+    // 1. Try High Accuracy GPS first (up to 7s).
+    // 2. If unavailable (code 2) or timed out (code 3), try standard accuracy (up to 8s).
+    // 3. ONLY if browser geolocation fails or times out (e.g. Firefox MLS disabled), fall back to IP location.
+    // 4. If user explicitly denied permission (code 1), respect their choice and do not fall back.
     navigator.geolocation.getCurrentPosition(
       handleSuccess,
-      (err) => {
-        if (err.code === 3 || err.code === 2) {
-          navigator.geolocation.getCurrentPosition(
-            handleSuccess,
-            handleError,
-            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-          )
-        } else {
-          handleError(err)
+      (err1) => {
+        if (err1.code === 1) {
+          setLocating(false)
+          setPermissionDenied(true)
+          setLocationData({ error: 'Location permission was denied. You can enter your address manually.' })
+          return
         }
+        navigator.geolocation.getCurrentPosition(
+          handleSuccess,
+          (err2) => {
+            if (err2.code === 1) {
+              setLocating(false)
+              setPermissionDenied(true)
+              setLocationData({ error: 'Location permission was denied. You can enter your address manually.' })
+              return
+            }
+            // Pure fallback: both browser geolocation attempts failed or timed out
+            fallbackToIp()
+          },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+        )
       },
-      { enableHighAccuracy: true, timeout: 5500, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
     )
   }, [reverseGeocode, placeMarker])
 
