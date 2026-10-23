@@ -11,6 +11,7 @@ async function getUser(request) {
 
 function responseItem(item) {
   const product = item.product
+  const img = product.imageUrl || (Array.isArray(product.images) ? product.images[0] : null) || product.image || null
   return {
     id: product.id,
     name: product.name,
@@ -20,10 +21,11 @@ function responseItem(item) {
     gstPercent: product.gstPercent,
     codFee: product.codFee,
     otherCharge: product.otherCharge,
-    visual: product.visual,
+    visual: product.visual || img,
     palette: product.palette,
     category: product.categoryId,
-    image: product.imageUrl || product.images?.[0] || null,
+    image: img,
+    imageUrl: img,
     stock: product.stock,
     published: product.published,
     availableForSale: product.availableForSale,

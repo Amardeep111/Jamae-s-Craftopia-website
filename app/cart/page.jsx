@@ -64,12 +64,26 @@ export default function CartPage() {
           {items.map((item) => (
             <div key={item.id} className="paper-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-5">
               {/* Product image */}
-              <div className="h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-sand">
+              <div className="h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-sand/40 relative">
                 <ProductImage
-                  visual={item.visual}
+                  src={
+                    item.image ||
+                    item.imageUrl ||
+                    (Array.isArray(item.images) ? item.images[0] : null) ||
+                    (typeof item.visual === 'string' && (item.visual.startsWith('http') || item.visual.startsWith('/'))
+                      ? item.visual
+                      : null)
+                  }
+                  visual={
+                    typeof item.visual === 'string' && !item.visual.startsWith('http') && !item.visual.startsWith('/')
+                      ? item.visual
+                      : 'yarn'
+                  }
                   palette={item.palette}
                   alt={item.name}
+                  fit="cover"
                   className="h-full w-full"
+                  imgClassName="object-cover"
                 />
               </div>
 

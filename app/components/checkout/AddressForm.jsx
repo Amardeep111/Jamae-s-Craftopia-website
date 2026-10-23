@@ -3,13 +3,18 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   MapPin, Compass, RotateCcw, ChevronDown, ChevronUp,
-  User, Home, Building, Check, Navigation,
+  User, Home, Building, Check, Navigation, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import { ADDRESS_TYPES, validateAddress, blankAddress } from '@/lib/address'
+import { indiaStates } from '@/lib/india-states'
 import InteractiveLocationPicker from './InteractiveLocationPicker'
+
+const STATE_OPTIONS = [...indiaStates]
+  .sort((a, b) => a.localeCompare(b))
+  .map((s) => ({ value: s, label: s }))
 
 const PIN_MAP = {
   '400001': { city: 'Mumbai', state: 'Maharashtra' }, '400005': { city: 'Mumbai', state: 'Maharashtra' },
@@ -21,31 +26,207 @@ const PIN_MAP = {
   '410001': { city: 'Pune', state: 'Maharashtra' }, '380001': { city: 'Ahmedabad', state: 'Gujarat' },
   '302001': { city: 'Jaipur', state: 'Rajasthan' }, '401301': { city: 'Pune', state: 'Maharashtra' },
   '311001': { city: 'Bhilai', state: 'Chhattisgarh' }, '700102': { city: 'Kolkata', state: 'West Bengal' },
-  '700033': { city: 'Kolkata', state: 'West Bengal' },
+  '700033': { city: 'Kolkata', state: 'West Bengal' }, '734001': { city: 'Siliguri', state: 'West Bengal' },
 }
 
-export default function AddressForm({ open, onClose, onSave, initial = null }) {
+function getStateAndCityFromPin(pin) {
+  if (!pin || pin.length < 2) return null
+  if (PIN_MAP[pin]) return PIN_MAP[pin]
+
+  const p3 = pin.slice(0, 3)
+  if (p3 === '403') return { state: 'Goa', city: '' }
+  if (p3 === '605') return { state: 'Puducherry', city: 'Puducherry' }
+  if (p3 === '682' && pin.startsWith('68255')) return { state: 'Lakshadweep', city: 'Kavaratti' }
+  if (p3 === '737') return { state: 'Sikkim', city: 'Gangtok' }
+  if (p3 === '744') return { state: 'Andaman and Nicobar Islands', city: 'Port Blair' }
+  if (['790', '791', '792'].includes(p3)) return { state: 'Arunachal Pradesh', city: 'Itanagar' }
+  if (['793', '794'].includes(p3)) return { state: 'Meghalaya', city: 'Shillong' }
+  if (p3 === '795') return { state: 'Manipur', city: 'Imphal' }
+  if (p3 === '796') return { state: 'Mizoram', city: 'Aizawl' }
+  if (p3 === '797') return { state: 'Nagaland', city: 'Kohima' }
+  if (['798', '799'].includes(p3)) return { state: 'Tripura', city: 'Agartala' }
+  if (p3 === '194') return { state: 'Ladakh', city: 'Leh' }
+  if (['246', '248', '249', '262', '263'].includes(p3)) return { state: 'Uttarakhand', city: 'Dehradun' }
+  if (['814', '815', '816', '825', '826', '827', '828', '829', '831', '832', '833', '834', '835'].includes(p3)) {
+    return { state: 'Jharkhand', city: p3 === '834' ? 'Ranchi' : p3 === '831' ? 'Jamshedpur' : p3 === '826' ? 'Dhanbad' : '' }
+  }
+  if (['396', '362'].includes(p3) && (pin.startsWith('3962') || pin.startsWith('3625'))) {
+    return { state: 'Dadra and Nagar Haveli and Daman and Diu', city: 'Daman' }
+  }
+  if (p3 === '734') return { state: 'West Bengal', city: 'Siliguri' }
+  if (p3 === '700' || p3 === '701') return { state: 'West Bengal', city: 'Kolkata' }
+  if (p3 === '110') return { state: 'Delhi', city: 'New Delhi' }
+  if (p3 === '400') return { state: 'Maharashtra', city: 'Mumbai' }
+  if (p3 === '411') return { state: 'Maharashtra', city: 'Pune' }
+  if (p3 === '560') return { state: 'Karnataka', city: 'Bangalore' }
+  if (p3 === '500') return { state: 'Telangana', city: 'Hyderabad' }
+  if (p3 === '600') return { state: 'Tamil Nadu', city: 'Chennai' }
+  if (p3 === '380') return { state: 'Gujarat', city: 'Ahmedabad' }
+  if (p3 === '302') return { state: 'Rajasthan', city: 'Jaipur' }
+  if (p3 === '226') return { state: 'Uttar Pradesh', city: 'Lucknow' }
+  if (p3 === '800') return { state: 'Bihar', city: 'Patna' }
+
+  const p2 = pin.slice(0, 2)
+  const p2Map = {
+    '11': { state: 'Delhi', city: 'Delhi' },
+    '12': { state: 'Haryana', city: '' },
+    '13': { state: 'Haryana', city: '' },
+    '14': { state: 'Punjab', city: '' },
+    '15': { state: 'Punjab', city: '' },
+    '16': { state: 'Chandigarh', city: 'Chandigarh' },
+    '17': { state: 'Himachal Pradesh', city: 'Shimla' },
+    '18': { state: 'Jammu and Kashmir', city: 'Jammu' },
+    '19': { state: 'Jammu and Kashmir', city: 'Srinagar' },
+    '20': { state: 'Uttar Pradesh', city: '' },
+    '21': { state: 'Uttar Pradesh', city: '' },
+    '22': { state: 'Uttar Pradesh', city: '' },
+    '23': { state: 'Uttar Pradesh', city: '' },
+    '24': { state: 'Uttar Pradesh', city: '' },
+    '25': { state: 'Uttar Pradesh', city: '' },
+    '26': { state: 'Uttar Pradesh', city: '' },
+    '27': { state: 'Uttar Pradesh', city: '' },
+    '28': { state: 'Uttar Pradesh', city: '' },
+    '30': { state: 'Rajasthan', city: '' },
+    '31': { state: 'Rajasthan', city: '' },
+    '32': { state: 'Rajasthan', city: '' },
+    '33': { state: 'Rajasthan', city: '' },
+    '34': { state: 'Rajasthan', city: '' },
+    '36': { state: 'Gujarat', city: '' },
+    '37': { state: 'Gujarat', city: '' },
+    '38': { state: 'Gujarat', city: '' },
+    '39': { state: 'Gujarat', city: '' },
+    '40': { state: 'Maharashtra', city: '' },
+    '41': { state: 'Maharashtra', city: '' },
+    '42': { state: 'Maharashtra', city: '' },
+    '43': { state: 'Maharashtra', city: '' },
+    '44': { state: 'Maharashtra', city: '' },
+    '45': { state: 'Madhya Pradesh', city: '' },
+    '46': { state: 'Madhya Pradesh', city: '' },
+    '47': { state: 'Madhya Pradesh', city: '' },
+    '48': { state: 'Madhya Pradesh', city: '' },
+    '49': { state: 'Chhattisgarh', city: 'Raipur' },
+    '50': { state: 'Telangana', city: '' },
+    '51': { state: 'Andhra Pradesh', city: '' },
+    '52': { state: 'Andhra Pradesh', city: '' },
+    '53': { state: 'Andhra Pradesh', city: '' },
+    '56': { state: 'Karnataka', city: '' },
+    '57': { state: 'Karnataka', city: '' },
+    '58': { state: 'Karnataka', city: '' },
+    '59': { state: 'Karnataka', city: '' },
+    '60': { state: 'Tamil Nadu', city: '' },
+    '61': { state: 'Tamil Nadu', city: '' },
+    '62': { state: 'Tamil Nadu', city: '' },
+    '63': { state: 'Tamil Nadu', city: '' },
+    '64': { state: 'Tamil Nadu', city: '' },
+    '67': { state: 'Kerala', city: '' },
+    '68': { state: 'Kerala', city: '' },
+    '69': { state: 'Kerala', city: '' },
+    '70': { state: 'West Bengal', city: '' },
+    '71': { state: 'West Bengal', city: '' },
+    '72': { state: 'West Bengal', city: '' },
+    '73': { state: 'West Bengal', city: '' },
+    '74': { state: 'West Bengal', city: '' },
+    '75': { state: 'Odisha', city: '' },
+    '76': { state: 'Odisha', city: '' },
+    '77': { state: 'Odisha', city: '' },
+    '78': { state: 'Assam', city: '' },
+    '80': { state: 'Bihar', city: '' },
+    '81': { state: 'Bihar', city: '' },
+    '82': { state: 'Bihar', city: '' },
+    '83': { state: 'Jharkhand', city: '' },
+    '84': { state: 'Bihar', city: '' },
+    '85': { state: 'Bihar', city: '' },
+  }
+  return p2Map[p2] || null
+}
+
+export default function AddressForm({ open, onClose, onSave, initial = null, saving = false }) {
   const [data, setData] = useState(initial ? { ...initial } : blankAddress())
   const [errors, setErrors] = useState({})
   const [openSections, setOpenSections] = useState({ info: true, address: true, location: true, prefs: true })
-  const [addressMode, setAddressMode] = useState('method-selection') // 'method-selection' | 'manual' | 'location' | 'manual-after-location'
+  const [addressMode, setAddressMode] = useState(initial ? 'manual' : 'method-selection') // 'method-selection' | 'manual' | 'location' | 'manual-after-location'
   const [confirmedLocationData, setConfirmedLocationData] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
   const formRef = useRef(null)
 
+  const isSaving = saving || submitting
+
   useEffect(() => {
-    if (initial) setData({ ...initial })
-    else setData(blankAddress())
+    if (initial) {
+      setData({ ...initial })
+      setAddressMode('manual')
+    } else {
+      setData(blankAddress())
+      setAddressMode('method-selection')
+    }
     setErrors({})
-    setAddressMode('method-selection')
     setConfirmedLocationData(null)
+    setSubmitting(false)
   }, [initial, open])
 
   const toggle = (k) => setOpenSections((s) => ({ ...s, [k]: !s[k] }))
   const update = (k, v) => { setData((d) => ({ ...d, [k]: v })); if (errors[k]) setErrors((e) => ({ ...e, [k]: '' })) }
 
+  const resolvePincode = (pin) => {
+    // 1. Instant 0ms local lookup
+    const local = getStateAndCityFromPin(pin)
+    if (local) {
+      setData((d) => ({
+        ...d,
+        pinCode: pin,
+        state: local.state || d.state,
+        city: d.city || local.city || '',
+      }))
+      setErrors((e) => ({
+        ...e,
+        pinCode: '',
+        state: local.state ? '' : e.state,
+        city: (d.city || local.city) ? '' : e.city,
+      }))
+    }
+
+    // 2. Strict 2-second bounded enrichment for district/city name
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2000)
+
+    fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal: controller.signal })
+      .then((res) => res.json())
+      .then((result) => {
+        clearTimeout(timer)
+        if (Array.isArray(result) && result[0]?.Status === 'Success' && result[0]?.PostOffice?.length) {
+          const po = result[0].PostOffice[0]
+          const stateName = po.State
+          const cityName = po.District || po.Block || po.Division || ''
+          setData((d) => ({
+            ...d,
+            state: stateName || d.state,
+            city: d.city || cityName || '',
+          }))
+          setErrors((e) => ({
+            ...e,
+            state: stateName ? '' : e.state,
+            city: (d.city || cityName) ? '' : e.city,
+          }))
+        }
+      })
+      .catch(() => {
+        clearTimeout(timer)
+      })
+  }
+
+  const handlePinChange = (val) => {
+    const pin = val.replace(/\D/g, '').slice(0, 6)
+    update('pinCode', pin)
+    if (pin.length === 6) {
+      resolvePincode(pin)
+    }
+  }
+
   const handlePinBlur = () => {
     const pin = (data.pinCode || '').replace(/\D/g, '').slice(0, 6)
-    if (pin.length === 6 && PIN_MAP[pin]) { update('city', PIN_MAP[pin].city); update('state', PIN_MAP[pin].state); setErrors((e) => ({ ...e, pinCode: '' })) }
+    if (pin.length === 6) {
+      resolvePincode(pin)
+    }
   }
 
   const handleLocationConfirm = (locData) => {
@@ -69,11 +250,19 @@ export default function AddressForm({ open, onClose, onSave, initial = null }) {
     setErrors({})
   }
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
+    if (isSaving) return
     const errs = validateAddress(data)
     setErrors(errs)
-    if (Object.keys(errs).length === 0) onSave({ ...data })
+    if (Object.keys(errs).length === 0) {
+      setSubmitting(true)
+      try {
+        await onSave({ ...data })
+      } finally {
+        setSubmitting(false)
+      }
+    }
   }
 
   const SectionHead = ({ icon: Icon, title, k }) => (
@@ -87,11 +276,11 @@ export default function AddressForm({ open, onClose, onSave, initial = null }) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-label="Address form" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-label="Address form" onClick={() => { if (!isSaving) onClose() }}>
       <div ref={formRef} className="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl bg-cream shadow-lift p-6 md:p-8" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 mb-2">
           <h2 className="font-display text-2xl text-plum">{initial ? 'Edit address' : 'Add new address'}</h2>
-          <button type="button" onClick={onClose} className="rounded-full bg-ivory p-2 text-plum hover:bg-blush/30 transition" aria-label="Close address form"><RotateCcw className="h-5 w-5" aria-hidden="true" /></button>
+          <button type="button" onClick={onClose} disabled={isSaving} className="rounded-full bg-ivory p-2 text-plum hover:bg-blush/30 transition disabled:opacity-50" aria-label="Close address form"><RotateCcw className="h-5 w-5" aria-hidden="true" /></button>
         </div>
         <p className="text-xs text-muted mb-4">Use your current location or enter manually. All fields validated for Indian addresses.</p>
 
@@ -194,13 +383,36 @@ export default function AddressForm({ open, onClose, onSave, initial = null }) {
                 <div>
                   <label htmlFor="pin-code" className="block text-sm font-medium text-plum mb-1">PIN code *</label>
                   <div className="flex gap-2">
-                    <input id="pin-code" type="text" inputMode="numeric" maxLength={6} value={data.pinCode} onChange={(e) => update('pinCode', e.target.value.replace(/\D/g, '').slice(0, 6))} onBlur={handlePinBlur} className={cn('w-32 rounded-2xl border bg-cream px-4 py-3 text-sm outline-none transition focus:ring-2', errors.pinCode ? 'border-bloom focus:ring-bloom/30' : 'border-sand focus:ring-bloom/30')} placeholder="400001" autoComplete="postal-code" />
+                    <input
+                      id="pin-code"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={data.pinCode}
+                      onChange={(e) => handlePinChange(e.target.value)}
+                      onBlur={handlePinBlur}
+                      className={cn('w-36 rounded-2xl border bg-cream px-4 py-3 text-sm outline-none transition focus:ring-2', errors.pinCode ? 'border-bloom focus:ring-bloom/30' : 'border-sand focus:ring-bloom/30')}
+                      placeholder="400001"
+                      autoComplete="postal-code"
+                    />
                   </div>
                   {errors.pinCode && <p className="mt-1.5 text-sm text-bloom">{errors.pinCode}</p>}
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Input label="City *" value={data.city} onChange={(e) => update('city', e.target.value)} error={errors.city} placeholder="Mumbai" autoComplete="address-level2" />
-                  <Input label="State *" value={data.state} onChange={(e) => update('state', e.target.value)} error={errors.state} placeholder="Maharashtra" autoComplete="address-level1" />
+                  <div>
+                    <label htmlFor="addr-state" className="block text-sm font-medium text-plum mb-1">State *</label>
+                    <Select
+                      id="addr-state"
+                      value={data.state}
+                      onChange={(v) => update('state', v)}
+                      options={STATE_OPTIONS}
+                      placeholder="Select state"
+                      error={!!errors.state}
+                      className="!w-full !bg-cream !rounded-2xl"
+                    />
+                    {errors.state && <p className="mt-1.5 text-sm text-bloom">{errors.state}</p>}
+                  </div>
                 </div>
               </div>
             )}
@@ -228,8 +440,26 @@ export default function AddressForm({ open, onClose, onSave, initial = null }) {
           </section>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="rounded-full px-5 py-2.5 text-sm font-semibold text-muted hover:text-plum transition ring-1 ring-sand hover:ring-blush/40">Cancel</button>
-            <button type="submit" className="rounded-full bg-plum px-6 py-2.5 text-sm font-semibold text-cream shadow-soft hover:bg-ink transition active:translate-y-0">{initial ? 'Update address' : 'Save address'}</button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="rounded-full px-5 py-2.5 text-sm font-semibold text-muted hover:text-plum transition ring-1 ring-sand hover:ring-blush/40 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-plum px-6 py-2.5 text-sm font-semibold text-cream shadow-soft hover:bg-ink transition active:translate-y-0 disabled:opacity-75 disabled:cursor-not-allowed min-w-[145px]"
+            >
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin text-cream" aria-hidden="true" />}
+              <span>
+                {isSaving
+                  ? (initial ? 'Updating address…' : 'Saving address…')
+                  : (initial ? 'Update address' : 'Save address')}
+              </span>
+            </button>
           </div>
         </form>
         )}

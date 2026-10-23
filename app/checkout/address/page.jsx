@@ -34,6 +34,7 @@ export default function CheckoutAddressPage() {
   const totalPrice = cartItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const [showForm, setShowForm] = useState(false)
   const [editingAddress, setEditingAddress] = useState(null)
+  const [savingAddress, setSavingAddress] = useState(false)
   const [justAdded, setJustAdded] = useState(false)
   const [sessionReady, setSessionReady] = useState(false)
   const [addressError, setAddressError] = useState('')
@@ -75,12 +76,18 @@ export default function CheckoutAddressPage() {
     }
   }, [sessionReady, hydrated, addresses, selectedAddressId, getDefaultAddress, selectAddress])
 
+  // Prefetch UPI payment details in background so QR code is instant at payment step
+  useEffect(() => {
+    fetch('/api/payment/upi-details').catch(() => {})
+  }, [])
+
   const selectedAddr = getSelectedAddress()
 
   async function handleSave(d) {
     const errs = validateAddress(d)
     if (Object.keys(errs).length > 0) return
     setAddressError('')
+    setSavingAddress(true)
     try {
       const response = await fetch('/api/addresses', {
         method: editingAddress ? 'PATCH' : 'POST',
@@ -89,9 +96,11 @@ export default function CheckoutAddressPage() {
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok || !result.success) throw new Error(result.error || 'Could not save the address.')
-      if (editingAddress) updateAddress(editingAddress.id, { ...result.data, ...d, id: editingAddress.id })
-      else {
+      if (editingAddress) {
+        updateAddress(editingAddress.id, { ...result.data, ...d, id: editingAddress.id })
+      } else {
         addAddress(result.data)
+        selectAddress(result.data.id)
         setJustAdded(true)
         setTimeout(() => setJustAdded(false), 3000)
       }
@@ -99,6 +108,9 @@ export default function CheckoutAddressPage() {
       setShowForm(false)
     } catch (error) {
       setAddressError(error.message || 'Could not save the address. Please try again.')
+      throw error
+    } finally {
+      setSavingAddress(false)
     }
   }
 
@@ -283,9 +295,10 @@ export default function CheckoutAddressPage() {
       {/* Form modal */}
       <AddressForm
         open={showForm}
-        onClose={() => { setShowForm(false); setEditingAddress(null) }}
+        onClose={() => { if (!savingAddress) { setShowForm(false); setEditingAddress(null) } }}
         onSave={handleSave}
         initial={editingAddress}
+        saving={savingAddress}
       />
     </main>
   )
