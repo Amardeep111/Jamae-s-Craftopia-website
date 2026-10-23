@@ -68,7 +68,7 @@ export default function PaymentPage() {
   const { loading, error, initialize, confirm, createOrder } = usePayment()
 
   // ── Guard: empty cart ────────────────────────────────────────────────────
-  if (items.length === 0) {
+  if (items.length === 0 && submitState !== 'success') {
     return (
       <div className="container-page pb-20 pt-10 text-center">
         <div className="mx-auto max-w-md rounded-3xl bg-ivory/60 p-10">
@@ -98,12 +98,13 @@ export default function PaymentPage() {
           setFailureMessage('Please add a delivery address before placing your order.')
           return
         }
+        const effectiveTotal = selectedMethod === 'cod' ? codTotal : orderTotal
         const orderData = {
           customerName: selectedAddress?.fullName || authEmail?.split('@')[0] || '',
           customerEmail: selectedAddress?.email || authEmail || '',
           customerPhone: selectedAddress?.mobileNumber || '',
           shippingAddress: { ...selectedAddress, userId: authUserId || null },
-          totalAmount: codTotal,
+          totalAmount: effectiveTotal,
           paymentMethod: selectedMethod === 'cod' ? 'Cash on Delivery' : 'UPI',
           paymentReference: selectedMethod === 'upi' ? (details?.paymentReference || null) : null,
           paymentStatus: selectedMethod === 'cod' ? 'COD_PENDING_COLLECTION' : 'AWAITING_VERIFICATION',
@@ -123,9 +124,7 @@ export default function PaymentPage() {
 
         clearCart()
 
-        // Persist the most recent order so the success page can render without
-        // a follow-up round-trip — but always redirect, never stay on
-        // "Processing payment…".
+        // Persist the most recent order so the success page can render immediately
         try {
           if (orderNumber) {
             window.sessionStorage.setItem('jamaes:lastOrderNumber', orderNumber)
@@ -134,11 +133,12 @@ export default function PaymentPage() {
               JSON.stringify({
                 orderId: order?.id,
                 orderNumber,
-                amount: codTotal,
+                amount: effectiveTotal,
                 method: selectedMethod === 'cod' ? 'Cash on Delivery' : 'UPI',
                 address: selectedAddress,
                 testMode: false,
                 paymentStatus: selectedMethod === 'cod' ? 'COD_PENDING_COLLECTION' : 'AWAITING_VERIFICATION',
+                paymentReference: selectedMethod === 'upi' ? (details?.paymentReference || null) : null,
                 status: selectedMethod === 'cod' ? 'CONFIRMED' : 'PENDING',
               })
             )
@@ -147,16 +147,9 @@ export default function PaymentPage() {
           /* session storage may be unavailable; redirect anyway */
         }
 
-        if (selectedMethod === 'upi') {
-          setOrderResult({ orderId: order?.id, orderNumber, amount: orderTotal, method: 'UPI', address: selectedAddress, paymentStatus: 'AWAITING_VERIFICATION', paymentReference: details?.paymentReference || null, whatsappNumber: details?.whatsappNumber || null })
-          setInFlight(false)
-          setSubmitState('success')
-          clearCart()
-          return
-        }
         setInFlight(false)
 
-        // Hard redirect so we leave the payment page entirely.
+        // Redirect to order success page so the user sees confirmation + tracking + "View my orders"
         if (orderNumber) {
           window.location.href = `/checkout/success?order=${encodeURIComponent(orderNumber)}`
         } else {
@@ -224,6 +217,12 @@ export default function PaymentPage() {
       clearCart()
       setInFlight(false)
       setSubmitState('success')
+      if (order?.orderNumber) {
+        window.location.href = `/checkout/success?order=${encodeURIComponent(order.orderNumber)}`
+      } else {
+        window.location.href = '/orders/me'
+      }
+      return
     } catch (e) {
       setInFlight(false)
       setFailureMessage(e.message || 'Payment could not be completed. Please try again.')

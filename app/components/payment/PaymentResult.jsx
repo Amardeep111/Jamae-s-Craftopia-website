@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { CheckCircle2, XCircle, Loader2, RefreshCw, ArrowRight, ShoppingBag, MessageCircle } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { formatPrice } from '@/data/products'
@@ -102,6 +103,12 @@ function Success({ result, onContinueShopping, onViewOrder }) {
         <Button onClick={onViewOrder} variant="primary" size="md">
           View order <ArrowRight className="h-4 w-4" />
         </Button>
+        <Link
+          href="/orders/me"
+          className="inline-flex items-center justify-center gap-1.5 rounded-full border border-sand bg-white px-5 py-2.5 text-sm font-semibold text-plum hover:bg-cream transition"
+        >
+          My orders
+        </Link>
         <Button onClick={onContinueShopping} variant="secondary" size="md">
           <ShoppingBag className="h-4 w-4" />
           Continue shopping

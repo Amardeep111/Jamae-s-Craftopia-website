@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Copy,
   AlertCircle,
+  MessageCircle,
 } from 'lucide-react'
 import { formatPrice } from '@/data/products'
 
@@ -158,6 +159,7 @@ function AddressSummary({ address }) {
 
 function PaymentSummary({ totalAmount, paymentMethod, paymentStatus, paymentReference }) {
   const isCod = paymentMethod === 'Cash on Delivery'
+  const isAwaiting = paymentStatus === 'AWAITING_VERIFICATION'
   return (
     <div className="space-y-1.5 text-sm">
       {paymentMethod && (
@@ -166,12 +168,12 @@ function PaymentSummary({ totalAmount, paymentMethod, paymentStatus, paymentRefe
           <span className="font-semibold text-plum">{paymentMethod}</span>
         </div>
       )}
-      {isCod && (
-        <div className="flex justify-between gap-3">
-          <span className="text-muted">Status</span>
-          <span className="font-semibold text-bloom">Pay on Delivery</span>
-        </div>
-      )}
+      <div className="flex justify-between gap-3">
+        <span className="text-muted">Status</span>
+        <span className={`font-semibold ${paymentStatus === 'PAID' ? 'text-sage' : isAwaiting ? 'text-amber-700' : isCod ? 'text-bloom' : 'text-plum'}`}>
+          {isCod ? 'Pay on Delivery' : isAwaiting ? 'Awaiting verification' : paymentStatus || 'Pending'}
+        </span>
+      </div>
       <div className="flex justify-between gap-3">
         <span className="text-muted">Total</span>
         <span className="font-display text-lg text-plum">{formatPrice(totalAmount)}</span>
@@ -183,8 +185,8 @@ function PaymentSummary({ totalAmount, paymentMethod, paymentStatus, paymentRefe
       )}
       {paymentReference && (
         <div className="flex justify-between gap-3">
-          <span className="text-muted">Ref</span>
-          <span className="font-mono text-xs text-plum break-all">{paymentReference}</span>
+          <span className="text-muted">Reference (UTR)</span>
+          <span className="font-mono text-xs text-plum break-all font-semibold">{paymentReference}</span>
         </div>
       )}
     </div>
@@ -200,6 +202,14 @@ function SuccessContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
   const [copied, setCopied]   = useState(false)
+  const [upiDetails, setUpiDetails] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/payment/upi-details')
+      .then((r) => r.json())
+      .then((body) => { if (body.success) setUpiDetails(body.data) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!orderNumber) {
@@ -208,13 +218,25 @@ function SuccessContent() {
       return
     }
 
+    try {
+      const cached = window.sessionStorage.getItem(`jamaes:order:${orderNumber}`)
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (parsed?.orderNumber === orderNumber) {
+          setOrder((curr) => curr || parsed)
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
     fetch(`/api/orders?orderNumber=${encodeURIComponent(orderNumber)}`)
       .then((r) => r.json())
       .then((body) => {
         if (body.success) setOrder(body.data)
-        else setError(body.error || 'Order not found.')
+        else setError((prev) => (order ? '' : (body.error || 'Order not found.')))
       })
-      .catch(() => setError('Could not load order.'))
+      .catch(() => setError((prev) => (order ? '' : 'Could not load order.')))
       .finally(() => setLoading(false))
   }, [orderNumber])
 
@@ -229,7 +251,7 @@ function SuccessContent() {
     }
   }
 
-  if (loading) {
+  if (loading && !order) {
     return (
       <div className="container-page pb-20 pt-10 text-center">
         <div className="mx-auto max-w-md rounded-3xl bg-ivory/60 p-10 animate-pulse">
@@ -259,7 +281,10 @@ function SuccessContent() {
     )
   }
 
-  const statusMeta = STATUS_META[order.status] || { label: order.status, color: 'text-muted', dot: 'bg-muted' }
+  const isAwaitingUpi = order.paymentStatus === 'AWAITING_VERIFICATION'
+  const whatsappNumber = upiDetails?.whatsappNumber || ''
+  const proofMessage = `Hi, I have placed order ${order.orderNumber} for ₹${Number(order.totalAmount || 0).toLocaleString('en-IN')} via UPI. My UTR/reference is ${order.paymentReference || 'sharing screenshot'}. Please verify and confirm my order.`
+  const whatsappUrl = isAwaitingUpi && whatsappNumber ? `https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(proofMessage)}` : ''
 
   return (
     <div className="container-page pb-24 pt-8 md:pt-12">
@@ -272,32 +297,75 @@ function SuccessContent() {
       </div>
 
       {/* Hero confirmation */}
-      <div className="mt-6 flex items-start gap-4 rounded-3xl bg-sage/10 border border-sage/30 p-6 md:p-8">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-sage/20">
-          <CheckCircle2 className="h-8 w-8 text-sage" aria-hidden="true" />
-        </div>
-        <div>
-          <h1 className="font-display text-3xl text-plum">{isCod(order) ? 'Order Placed!' : 'Order Confirmed!'}</h1>
-          <p className="mt-1 text-muted">
-            {isCod(order)
-              ? 'Thank you! Your handmade order is confirmed — payment is due on delivery.'
-              : 'Thank you! Your handmade piece is on its way.'
-            }
-          </p>
-          {/* Order number */}
-          <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-muted">Order</span>
-            <button
-              onClick={copyOrderNumber}
-              className="inline-flex items-center gap-1 rounded-full bg-plum px-3 py-1 text-sm font-mono font-semibold text-cream hover:bg-ink transition"
-              title="Copy order number"
-            >
-              {order.orderNumber}
-              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-            {copied && <span className="text-xs text-sage font-semibold animate-fade-in">Copied!</span>}
+      <div className="mt-6 flex flex-col gap-4 rounded-3xl bg-sage/10 border border-sage/30 p-6 md:p-8">
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-sage/20">
+            <CheckCircle2 className="h-8 w-8 text-sage" aria-hidden="true" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-display text-2xl sm:text-3xl text-plum">
+              {isCod(order)
+                ? 'Order Placed!'
+                : isAwaitingUpi
+                  ? 'Order Placed — Payment Verification Pending'
+                  : 'Order Confirmed!'}
+            </h1>
+            <p className="mt-1 text-sm sm:text-base text-muted">
+              {isCod(order)
+                ? 'Thank you! Your handmade order is confirmed — payment is due on delivery.'
+                : isAwaitingUpi
+                  ? 'Thank you! We received your order and will confirm it once the UPI transfer is verified.'
+                  : 'Thank you! Your handmade piece is on its way.'}
+            </p>
+            {/* Order number */}
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-muted">Order</span>
+              <button
+                onClick={copyOrderNumber}
+                className="inline-flex items-center gap-1 rounded-full bg-plum px-3 py-1 text-sm font-mono font-semibold text-cream hover:bg-ink transition"
+                title="Copy order number"
+              >
+                {order.orderNumber}
+                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+              {copied && <span className="text-xs text-sage font-semibold animate-fade-in">Copied!</span>}
+              <Link
+                href="/orders/me"
+                className="ml-auto inline-flex items-center gap-1 rounded-full bg-plum/10 hover:bg-plum/20 px-3.5 py-1 text-xs font-semibold text-plum transition"
+              >
+                Go to My Orders →
+              </Link>
+            </div>
           </div>
         </div>
+
+        {/* UPI Verification Info & WhatsApp Proof Action */}
+        {isAwaitingUpi && (
+          <div className="rounded-2xl bg-amber-50 border border-amber-200/80 p-4 text-sm text-amber-950 mt-1">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="font-semibold">UPI Payment Verification Pending</p>
+                <p className="mt-0.5 text-xs text-amber-800">
+                  {order.paymentReference ? (
+                    <>Saved Reference / UTR: <strong className="font-mono">{order.paymentReference}</strong>. </>
+                  ) : null}
+                  Send your payment screenshot to help us verify and confirm your order promptly.
+                </p>
+              </div>
+              {whatsappUrl && (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#25D366] px-4 py-2 text-xs font-semibold text-white shadow-soft transition hover:brightness-110"
+                >
+                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                  Send Proof on WhatsApp
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Two-column layout */}

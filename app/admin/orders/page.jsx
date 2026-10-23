@@ -32,6 +32,11 @@ export default function AdminOrders() {
 
   async function updateStatus(order, nextStatus) {
     setError('')
+    const isUpi = order.paymentMethod === 'UPI' || order.paymentMethod?.toLowerCase().includes('upi')
+    if (nextStatus === 'CONFIRMED' && isUpi && order.paymentStatus !== 'PAID') {
+      setError(`Cannot confirm UPI order ${order.orderNumber} before payment is verified. Click "Verify Payment" to confirm it.`)
+      return
+    }
     try {
       const response = await fetch('/api/admin/orders', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: order.id, status: nextStatus }) })
       const result = await response.json()
@@ -73,10 +78,19 @@ export default function AdminOrders() {
       <div className="space-y-4">{filteredOrders.map((order) => <article key={order.id} className="min-w-0 rounded-2xl bg-cream p-4 shadow-soft ring-1 ring-sand sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0"><Link href={`/admin/orders/${order.id}`} className="break-all font-semibold text-plum underline decoration-sand underline-offset-4 hover:decoration-plum">{order.orderNumber}</Link><p className="mt-1 break-words text-sm">{order.customerName} · {order.customerEmail}</p><p className="text-xs text-muted">{new Date(order.createdAt).toLocaleString()}</p></div>
-          {canManage ? <label className="text-sm">Fulfillment status<select aria-label={`Status for ${order.orderNumber}`} value={order.status} onChange={(event) => updateStatus(order, event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-sand bg-white px-3 sm:ml-2 sm:mt-0 sm:w-auto">{STATUSES.map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></label> : <span className="rounded-full bg-blush/40 px-3 py-2 text-sm text-plum">{label(order.status)}</span>}
+          {canManage ? <label className="text-sm">Fulfillment status<select aria-label={`Status for ${order.orderNumber}`} value={order.status} onChange={(event) => updateStatus(order, event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-sand bg-white px-3 sm:ml-2 sm:mt-0 sm:w-auto">{STATUSES.map((value) => {
+            const isUpi = order.paymentMethod === 'UPI' || order.paymentMethod?.toLowerCase().includes('upi')
+            const disabled = value === 'CONFIRMED' && isUpi && order.paymentStatus !== 'PAID'
+            return <option key={value} value={value} disabled={disabled}>{label(value)}{disabled ? ' (Requires Paid)' : ''}</option>
+          })}</select></label> : <span className="rounded-full bg-blush/40 px-3 py-2 text-sm text-plum">{label(order.status)}</span>}
         </div>
         <div className="mt-4 flex flex-col justify-between gap-2 border-t border-sand pt-3 text-sm sm:flex-row"><span className="break-words">{order.items.map((item) => `${item.product.name} × ${item.quantity}`).join(', ')}</span><strong className="shrink-0 text-plum">₹{order.totalAmount}</strong></div>
-        <p className="mt-1 break-words text-xs text-muted">Payment: {order.paymentMethod || 'Not set'} · {label(order.paymentStatus)}</p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+          <p className="break-words text-muted">Payment: <span className="font-medium text-plum">{order.paymentMethod || 'Not set'}</span> · <span className={`font-semibold ${order.paymentStatus === 'PAID' ? 'text-emerald-700' : order.paymentStatus === 'AWAITING_VERIFICATION' ? 'text-amber-700' : 'text-plum'}`}>{label(order.paymentStatus)}</span>{order.paymentReference ? ` · Ref: ${order.paymentReference}` : ''}</p>
+          {canManage && (order.paymentMethod === 'UPI' || order.paymentMethod?.toLowerCase().includes('upi')) && order.paymentStatus !== 'PAID' && (
+            <Link href={`/admin/orders/${order.id}`} className="rounded-full bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2.5 py-0.5 text-xs font-semibold text-amber-900 transition">Verify Payment →</Link>
+          )}
+        </div>
         {order.refundRequests?.map((refund) => <div key={refund.id} className="mt-4 rounded-2xl border border-sand bg-white p-3 text-sm sm:p-4">
           <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><strong className="text-plum">Refund request · {label(refund.status)}</strong>
             {canManage && !['COMPLETED', 'REJECTED'].includes(refund.status) && <select aria-label={`Refund status for ${order.orderNumber}`} value={refund.status} onChange={(event) => updateRefundStatus(refund, event.target.value)} className="min-h-11 w-full rounded-lg border border-sand px-3 sm:w-auto">

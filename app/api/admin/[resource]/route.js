@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { getAdminSession } from '@/lib/auth/admin'
-import { sendEmailBestEffort, sendOrderUpdateEmail } from '@/lib/notification/email'
+import { sendEmailBestEffort, sendOrderUpdateEmail, sendEmail } from '@/lib/notification/email'
 
 const validStatuses = new Set(['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURN_REQUESTED', 'RETURN_APPROVED', 'RETURN_IN_TRANSIT', 'RETURNED'])
 const validRefundStatuses = new Set(['APPROVED', 'PROCESSING', 'COMPLETED', 'REJECTED'])
@@ -19,11 +19,13 @@ const orderTransitions = {
 }
 const paymentTransitions = {
   PENDING: ['AWAITING_VERIFICATION', 'PAID', 'FAILED', 'EXPIRED', 'CANCELLED'],
-  AWAITING_VERIFICATION: ['PAID', 'MANUAL_REVIEW', 'FAILED', 'EXPIRED'],
-  MANUAL_REVIEW: ['PAID', 'FAILED'],
-  COD_PENDING_COLLECTION: ['COD_COLLECTED'],
-  FAILED: ['AWAITING_VERIFICATION'],
-  EXPIRED: ['PENDING'],
+  AWAITING_VERIFICATION: ['PAID', 'MANUAL_REVIEW', 'FAILED', 'EXPIRED', 'CANCELLED'],
+  MANUAL_REVIEW: ['PAID', 'AWAITING_VERIFICATION', 'FAILED', 'CANCELLED'],
+  COD_PENDING_COLLECTION: ['COD_COLLECTED', 'CANCELLED'],
+  COD_COLLECTED: ['PAID'],
+  FAILED: ['AWAITING_VERIFICATION', 'PAID', 'CANCELLED'],
+  EXPIRED: ['PENDING', 'AWAITING_VERIFICATION', 'CANCELLED'],
+  PAID: ['MANUAL_REVIEW', 'REFUND_REQUESTED', 'REFUNDED'],
 }
 const validPaymentStatuses = new Set(Object.keys(paymentTransitions).flatMap((status) => [status, ...paymentTransitions[status]]))
 
@@ -68,7 +70,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ success: true, data })
     }
     if (resource === 'orders') {
-      const data = await prisma.order.findMany({ orderBy: { createdAt: 'desc' }, include: { items: { include: { product: true } }, refundRequests: { orderBy: { createdAt: 'desc' } } } })
+      const data = await prisma.order.findMany({ orderBy: { createdAt: 'desc' }, include: { items: { include: { product: true } }, refundRequests: { orderBy: { createdAt: 'desc' } }, paymentLogs: { orderBy: { createdAt: 'desc' } } } })
       return NextResponse.json({ success: true, data })
     }
     if (resource === 'customRequests') {
@@ -120,13 +122,11 @@ export async function PATCH(request, { params }) {
     if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ success: false, error: 'A valid update is required.' }, { status: 400 })
     if (resource === 'customRequests') {
       const allowedStatuses = new Set(['NEW', 'REVIEWING', 'QUOTED', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'DECLINED'])
-      const quotedPrice = body.quotedPrice === '' || body.quotedPrice === null || body.quotedPrice === undefined ? null : Number(body.quotedPrice)
-      if (typeof body.id !== 'string' || !allowedStatuses.has(body.status) || typeof body.adminNotes !== 'string' || body.adminNotes.length > 2000) {
+      let quotedPrice = body.quotedPrice === '' || body.quotedPrice === null || body.quotedPrice === undefined ? null : Number(body.quotedPrice)
+      if (typeof body.id !== 'string' || !allowedStatuses.has(body.status) || (body.adminNotes !== undefined && typeof body.adminNotes !== 'string') || (body.adminNotes && body.adminNotes.length > 2000)) {
         return NextResponse.json({ success: false, error: 'Choose a valid status and keep internal notes under 2,000 characters.' }, { status: 400 })
       }
-      if (quotedPrice !== null && (!Number.isInteger(quotedPrice) || quotedPrice < 1 || quotedPrice > 10000000)) return NextResponse.json({ success: false, error: 'Enter a whole price between ₹1 and ₹1,00,00,000.' }, { status: 400 })
-      if (body.status === 'ACCEPTED' && quotedPrice === null) return NextResponse.json({ success: false, error: 'Add the quoted price before accepting this request.' }, { status: 400 })
-      const current = await prisma.customRequest.findUnique({ where: { id: body.id } })
+      const current = await prisma.customRequest.findUnique({ where: { id: body.id }, include: { user: true } })
       if (!current) return NextResponse.json({ success: false, error: 'Custom request not found.' }, { status: 404 })
       const allowedNext = {
         NEW: ['REVIEWING', 'QUOTED', 'ACCEPTED', 'DECLINED'],
@@ -138,24 +138,187 @@ export async function PATCH(request, { params }) {
         DECLINED: [],
       }
       if (body.status !== current.status && !allowedNext[current.status]?.includes(body.status)) return NextResponse.json({ success: false, error: 'That custom request status change is not allowed.' }, { status: 409 })
-      const data = await prisma.customRequest.update({ where: { id: body.id }, data: { status: body.status, adminNotes: body.adminNotes.trim() || null, quotedPrice: quotedPrice ?? current.quotedPrice } })
-      const shouldSendQuote = body.status === 'ACCEPTED' && (current.status !== 'ACCEPTED' || data.quotedPrice !== current.quotedPrice)
+
+      const shouldCreateOrder = body.status === 'ACCEPTED' && (body.createOrder === true || body.orderDetails != null)
+      const od = body.orderDetails || {}
+
+      if (body.status === 'ACCEPTED') {
+        const checkPrice = shouldCreateOrder ? Number(od.basePrice || quotedPrice) : quotedPrice
+        if (!checkPrice || !Number.isInteger(checkPrice) || checkPrice < 1 || checkPrice > 10000000) {
+          return NextResponse.json({ success: false, error: 'Enter a valid base price between ₹1 and ₹1,00,00,000 before accepting.' }, { status: 400 })
+        }
+      } else if (quotedPrice !== null && (!Number.isInteger(quotedPrice) || quotedPrice < 1 || quotedPrice > 10000000)) {
+        return NextResponse.json({ success: false, error: 'Enter a whole price between ₹1 and ₹1,00,00,000.' }, { status: 400 })
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        let createdOrder = null
+        let finalQuotedPrice = quotedPrice ?? current.quotedPrice
+
+        if (shouldCreateOrder) {
+          const basePrice = Math.round(Number(od.basePrice || quotedPrice || current.quotedPrice || 0))
+          const gstPercent = Math.max(0, Math.min(100, Math.round(Number(od.gstPercent || 0))))
+          const gstAmount = Math.round(basePrice * gstPercent / 100)
+          const shipping = Math.max(0, Math.round(Number(od.shippingFee ?? od.shipping ?? 0)))
+          const otherCharge = Math.max(0, Math.round(Number(od.otherCharge ?? 0)))
+          const fee = gstAmount + otherCharge
+          const totalAmount = basePrice + shipping + fee
+          finalQuotedPrice = totalAmount
+
+          // Ensure product placeholder for custom orders exists
+          let customProduct = await tx.product.findUnique({ where: { slug: 'custom-order' } })
+          if (!customProduct) {
+            let category = await tx.category.findFirst()
+            if (!category) {
+              category = await tx.category.create({
+                data: { name: 'Custom Creations', slug: `custom-creations-${Date.now()}` },
+              })
+            }
+            customProduct = await tx.product.create({
+              data: {
+                name: 'Custom Order Piece',
+                slug: 'custom-order',
+                price: 0,
+                stock: 99999,
+                published: false,
+                categoryId: category.id,
+                short: 'Handcrafted custom order piece made to customer specifications.',
+                description: 'Handcrafted custom order piece made to customer specifications.',
+              },
+            })
+          }
+
+          const customerName = (od.customerName || current.name || 'Customer').trim()
+          const customerEmail = (od.customerEmail || (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(current.contact) ? current.contact : '') || current.user?.email || 'customer@example.com').trim()
+          const customerPhone = (od.customerPhone || (/^\+?\d{10,15}$/.test(current.contact.replace(/\s+/g, '')) ? current.contact.replace(/\s+/g, '') : null) || current.user?.phone || null)
+
+          const addr = od.shippingAddress && typeof od.shippingAddress === 'object' ? od.shippingAddress : {}
+          const addressSnapshot = {
+            fullName: addr.fullName?.trim() || customerName,
+            mobileNumber: addr.mobileNumber?.trim() || customerPhone || '',
+            houseFlatBuilding: addr.houseFlatBuilding?.trim() || addr.house?.trim() || '',
+            areaStreet: addr.areaStreet?.trim() || addr.area?.trim() || '',
+            landmark: addr.landmark?.trim() || null,
+            city: addr.city?.trim() || '',
+            state: addr.state?.trim() || '',
+            pinCode: addr.pinCode?.trim() || addr.pin?.trim() || '',
+            country: 'India',
+          }
+
+          const method = od.paymentMethod === 'Cash on Delivery' || od.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI'
+          const pStatus = method === 'Cash on Delivery' ? 'COD_PENDING_COLLECTION' : 'AWAITING_VERIFICATION'
+
+          const date = new Date()
+          const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`
+          const rand = Math.random().toString(36).slice(2, 8).toUpperCase()
+          const orderNumber = `ORD-JM-${ymd}-${rand}`
+
+          createdOrder = await tx.order.create({
+            data: {
+              orderNumber,
+              customerName,
+              customerEmail,
+              customerPhone,
+              userId: current.userId || null,
+              shippingAddress: addressSnapshot,
+              status: 'CONFIRMED',
+              totalAmount,
+              subtotal: basePrice,
+              discount: 0,
+              shipping,
+              fee,
+              paymentMethod: method,
+              paymentStatus: pStatus,
+              estimatedDelivery: od.estimatedDelivery?.trim() || '7–10 business days',
+              notes: `Custom Request #${current.id} | Idea: ${current.idea} | Colors: ${current.colors || 'Any'} | Budget: ${current.budget || 'N/A'}${od.adminNotes ? ` | Note: ${od.adminNotes}` : ''}`.slice(0, 2000),
+              paymentLogs: {
+                create: [
+                  {
+                    amount: totalAmount,
+                    status: pStatus,
+                    method,
+                    provider: method === 'Cash on Delivery' ? 'COD' : 'UPI',
+                    verifiedBy: session.user.email,
+                  },
+                ],
+              },
+              items: {
+                create: [
+                  {
+                    productId: customProduct.id,
+                    quantity: 1,
+                    unitPrice: basePrice,
+                    gstPercent,
+                    gstAmount,
+                    codFee: 0,
+                    otherCharge,
+                    customization: `Custom Piece: ${current.idea}${current.colors ? ` · Colors: ${current.colors}` : ''}${current.details ? ` · ${current.details}` : ''}`.slice(0, 1000),
+                  },
+                ],
+              },
+            },
+            include: {
+              items: { include: { product: true } },
+              paymentLogs: true,
+            },
+          })
+        }
+
+        const noteAddition = createdOrder ? `Order created: ${createdOrder.orderNumber} (ID: ${createdOrder.id})` : ''
+        const baseNotes = (body.adminNotes !== undefined ? body.adminNotes : current.adminNotes) || ''
+        const updatedAdminNotes = [baseNotes.trim(), noteAddition].filter(Boolean).join(' | ').slice(0, 2000)
+
+        const savedRequest = await tx.customRequest.update({
+          where: { id: body.id },
+          data: {
+            status: body.status,
+            adminNotes: updatedAdminNotes || null,
+            quotedPrice: finalQuotedPrice,
+          },
+        })
+
+        return { request: savedRequest, order: createdOrder }
+      })
+
+      const shouldSendQuote = body.status === 'ACCEPTED' && (current.status !== 'ACCEPTED' || result.request.quotedPrice !== current.quotedPrice)
       const shouldSendDecline = body.status === 'DECLINED' && current.status !== 'DECLINED'
-      const customerEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(current.contact) ? current.contact : ''
+      const customerEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(current.contact)
+        ? current.contact
+        : current.user?.email || (od.customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(od.customerEmail) ? od.customerEmail : '')
+
       if (customerEmail && shouldSendQuote) {
         const settings = await prisma.storeSetting.findUnique({ where: { id: 'main' } }).catch(() => null)
         const vpa = settings?.merchantVpa?.trim() || process.env.MERCHANT_UPI_ID?.trim() || ''
         const merchantName = settings?.merchantName?.trim() || process.env.MERCHANT_PAYEE_NAME?.trim() || "Jamae's Craftopia"
+        const finalPrice = result.request.quotedPrice || 0
+        const orderRef = result.order ? result.order.orderNumber : `custom-${current.id}`
         const upiUrl = /^[a-zA-Z0-9._-]{2,99}@[a-zA-Z0-9]{2,40}$/.test(vpa)
-          ? `upi://pay?${new URLSearchParams({ pa: vpa, pn: merchantName, am: String(data.quotedPrice), cu: 'INR', tn: 'Custom order payment' })}`
+          ? `upi://pay?${new URLSearchParams({ pa: vpa, pn: merchantName, am: String(finalPrice), cu: 'INR', tn: `Order ${orderRef}` })}`
           : ''
-        const paymentText = upiUrl ? `Pay using this UPI link: ${upiUrl}\nUPI ID: ${vpa}\nAfter paying, reply to this email with the UTR/reference number.` : 'Reply to this email and we will share the payment details.'
-        await sendEmailBestEffort(() => sendEmail({ to: customerEmail, subject: "Your custom order is accepted — price and payment details", text: `Hello ${current.name},\n\nYour custom request “${current.idea}” has been accepted. The total price is ₹${data.quotedPrice.toLocaleString('en-IN')}.\n\n${paymentText}\n\nWe will begin making your piece after payment is confirmed.\n\nJamae's Craftopia` }), 'custom-request-quote')
+        const paymentText = upiUrl
+          ? `Pay using this UPI link: ${upiUrl}\nUPI ID: ${vpa}\nAfter paying, reply to this email with the UTR/reference number.`
+          : 'Reply to this email and we will share the payment details.'
+
+        const orderInfo = result.order
+          ? `Order Number: ${result.order.orderNumber}\nItem Price: ₹${result.order.subtotal.toLocaleString('en-IN')}\nGST & Charges: ₹${result.order.fee.toLocaleString('en-IN')}\nShipping: ₹${result.order.shipping.toLocaleString('en-IN')}\nTotal Payable: ₹${result.order.totalAmount.toLocaleString('en-IN')}\nEstimated Delivery: ${result.order.estimatedDelivery || '7–10 business days'}\n\n`
+          : `Total Price: ₹${finalPrice.toLocaleString('en-IN')}\n\n`
+
+        await sendEmailBestEffort(() => sendEmail({
+          to: customerEmail,
+          subject: `Your custom order ${result.order ? result.order.orderNumber : ''} has been accepted!`,
+          text: `Hello ${current.name},\n\nGreat news! Your custom request “${current.idea}” has been accepted by our artisans.\n\n${orderInfo}${paymentText}\n\nWe will begin handcrafting your piece as soon as payment is confirmed.\n\nWarm regards,\nJamae's Craftopia`,
+        }), 'custom-request-quote')
       }
+
       if (customerEmail && shouldSendDecline) {
-        await sendEmailBestEffort(() => sendEmail({ to: customerEmail, subject: "An update on your custom order request", text: `Hello ${current.name},\n\nThank you for sharing “${current.idea}” with us. We are unable to take this request forward at this time. You are welcome to send us another idea.\n\nJamae's Craftopia` }), 'custom-request-declined')
+        await sendEmailBestEffort(() => sendEmail({
+          to: customerEmail,
+          subject: 'An update on your custom order request',
+          text: `Hello ${current.name},\n\nThank you for sharing “${current.idea}” with us. We are unable to take this request forward at this time. You are welcome to submit another idea in the future.\n\nWarm regards,\nJamae's Craftopia`,
+        }), 'custom-request-declined')
       }
-      return NextResponse.json({ success: true, data })
+
+      return NextResponse.json({ success: true, data: result.request, order: result.order })
     }
     if (resource === 'users') {
       if (typeof body.id !== 'string' || typeof body.active !== 'boolean') return NextResponse.json({ success: false, error: 'Customer and account status are required.' }, { status: 400 })
@@ -202,9 +365,22 @@ export async function PATCH(request, { params }) {
         return NextResponse.json({ success: true, data: updated })
       }
       if (typeof body.id !== 'string') return NextResponse.json({ success: false, error: 'Order ID is required.' }, { status: 400 })
-      const current = await prisma.order.findUnique({ where: { id: body.id }, select: { id: true, orderNumber: true, customerEmail: true, customerName: true, status: true, paymentStatus: true, paymentMethod: true, totalAmount: true } })
+      const current = await prisma.order.findUnique({ where: { id: body.id }, select: { id: true, orderNumber: true, customerEmail: true, customerName: true, status: true, paymentStatus: true, paymentMethod: true, paymentReference: true, totalAmount: true } })
       if (!current) return NextResponse.json({ success: false, error: 'Order not found.' }, { status: 404 })
       const data = {}
+      if (body.paymentReference !== undefined) {
+        if (body.paymentReference === null || body.paymentReference === '') {
+          data.paymentReference = null
+        } else if (typeof body.paymentReference === 'string') {
+          const trimmed = body.paymentReference.trim()
+          if (trimmed.length > 80) {
+            return NextResponse.json({ success: false, error: 'Payment reference cannot exceed 80 characters.' }, { status: 400 })
+          }
+          data.paymentReference = trimmed || null
+        } else {
+          return NextResponse.json({ success: false, error: 'Enter a valid payment reference.' }, { status: 400 })
+        }
+      }
       if (body.status !== undefined) {
         if (!validStatuses.has(body.status)) return NextResponse.json({ success: false, error: 'Choose a valid order status.' }, { status: 400 })
         if (body.status !== current.status && !orderTransitions[current.status]?.includes(body.status)) {
@@ -219,6 +395,37 @@ export async function PATCH(request, { params }) {
         }
         data.paymentStatus = body.paymentStatus
       }
+
+      const isUpiOrder = current.paymentMethod === 'UPI' || current.paymentMethod?.toLowerCase().includes('upi')
+      const targetPaymentStatus = body.paymentStatus !== undefined ? body.paymentStatus : current.paymentStatus
+      const effectivePaymentRef = (data.paymentReference !== undefined ? data.paymentReference : current.paymentReference)?.trim()
+
+      // Constraint: UPI payment cannot be marked PAID without a payment reference (UTR)
+      if (body.paymentStatus === 'PAID' && isUpiOrder && !effectivePaymentRef) {
+        return NextResponse.json(
+          { success: false, error: 'Enter the UPI transaction reference (UTR) before confirming payment.' },
+          { status: 400 }
+        )
+      }
+
+      // Constraint: A UPI order cannot be marked CONFIRMED (or fulfillment advanced) if payment is not PAID
+      if (
+        isUpiOrder &&
+        body.status !== undefined &&
+        ['CONFIRMED', 'IN_PROGRESS', 'SHIPPED', 'DELIVERED'].includes(body.status) &&
+        targetPaymentStatus !== 'PAID'
+      ) {
+        return NextResponse.json(
+          { success: false, error: 'Cannot confirm a UPI order before payment is verified and marked as Paid.' },
+          { status: 400 }
+        )
+      }
+
+      // Convenience: When admin marks payment as PAID and fulfillment is PENDING, automatically advance to CONFIRMED
+      if (body.paymentStatus === 'PAID' && current.status === 'PENDING' && body.status === undefined) {
+        data.status = 'CONFIRMED'
+      }
+
       for (const [field, maxLength] of [['trackingNumber', 100], ['shippingPartner', 100], ['estimatedDelivery', 100]]) {
         if (body[field] === undefined) continue
         if (typeof body[field] !== 'string' || body[field].trim().length > maxLength) {
@@ -237,15 +444,32 @@ export async function PATCH(request, { params }) {
           }
         }
         if (body.paymentStatus && body.paymentStatus !== current.paymentStatus) {
+          const effectiveUtr = data.paymentReference !== undefined ? data.paymentReference : current.paymentReference
           await tx.paymentLog.create({
             data: {
               orderId: current.id,
               amount: current.totalAmount,
               status: body.paymentStatus,
               provider: current.paymentMethod,
-              method: 'ADMIN_STATUS_UPDATE',
+              method: body.paymentStatus === 'PAID' ? 'ADMIN_PAYMENT_VERIFIED' : 'ADMIN_STATUS_UPDATE',
+              utr: effectiveUtr || null,
+              providerReference: effectiveUtr || null,
               verifiedBy: session.user.email,
               verifiedAt: ['PAID', 'COD_COLLECTED'].includes(body.paymentStatus) ? new Date() : null,
+            },
+          })
+        } else if (data.paymentReference !== undefined && data.paymentReference !== current.paymentReference) {
+          await tx.paymentLog.create({
+            data: {
+              orderId: current.id,
+              amount: current.totalAmount,
+              status: current.paymentStatus,
+              provider: current.paymentMethod,
+              method: 'ADMIN_REFERENCE_UPDATE',
+              utr: data.paymentReference || null,
+              providerReference: data.paymentReference || null,
+              verifiedBy: session.user.email,
+              verifiedAt: null,
             },
           })
         }
