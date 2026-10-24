@@ -33,7 +33,7 @@ export default function UpiForm({ total, orderId, onSubmit, loading }) {
   const amount = Math.max(0, Number(total) || 0).toFixed(2)
   const transactionNote = orderId ? `Order ${orderId}` : "Jamae's Craftopia order"
   const upiDeepLink = merchant
-    ? `upi://pay?pa=${encodeURIComponent(merchant.vpa)}&pn=${encodeURIComponent(merchant.name)}&am=${amount}&cu=INR&tn=${encodeURIComponent(transactionNote)}`
+    ? `upi://pay?pa=${merchant.vpa.trim()}&pn=${merchant.name.trim()}&am=${amount}&cu=INR&tn=${transactionNote}`
     : ''
   const whatsappNumber = merchant?.whatsappNumber || ''
   const whatsappMessage = `Hi! I have paid ₹${amount} to ${merchant?.vpa || "Jamae's Craftopia"} via UPI. I will share the payment screenshot and UTR here for confirmation.`

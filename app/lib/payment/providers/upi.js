@@ -2,7 +2,6 @@
  * Direct UPI payment provider adapter.
  * Generates UPI intent URI and QR code for server-calculated amount.
  */
-import { encode } from 'querystring'
 
 export const upiProvider = {
   name: 'upi',
@@ -23,7 +22,7 @@ export const upiProvider = {
       tn: `Order ${orderNumber || orderId}`,
     }
 
-    const upiUri = `upi://pay?${encode(params)}`
+    const upiUri = `upi://pay?pa=${params.pa}&pn=${params.pn}&am=${params.am}&cu=${params.cu}&tn=${params.tn}`
 
     return {
       provider: 'upi',
