@@ -293,7 +293,7 @@ export async function PATCH(request, { params }) {
         const finalPrice = result.request.quotedPrice || 0
         const orderRef = result.order ? result.order.orderNumber : `custom-${current.id}`
         const upiUrl = /^[a-zA-Z0-9._-]{2,99}@[a-zA-Z0-9]{2,40}$/.test(vpa)
-          ? `upi://pay?${new URLSearchParams({ pa: vpa, pn: merchantName, am: String(finalPrice), cu: 'INR', tn: `Order ${orderRef}` })}`
+          ? `upi://pay?pa=${vpa}&pn=${merchantName}&am=${finalPrice}&cu=INR&tn=Order ${orderRef}`
           : ''
         const paymentText = upiUrl
           ? `Pay using this UPI link: ${upiUrl}\nUPI ID: ${vpa}\nAfter paying, reply to this email with the UTR/reference number.`
